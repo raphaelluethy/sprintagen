@@ -369,10 +369,11 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 												key={msg.id}
 											>
 												<div
-													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2 ${msg.role === "user"
+													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2 ${
+														msg.role === "user"
 															? "bg-primary text-primary-foreground"
 															: "bg-muted"
-														}`}
+													}`}
 												>
 													<div className="prose prose-sm prose-headings:my-2 prose-li:my-0 prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto break-words prose-code:rounded prose-code:bg-black/10 prose-code:px-1 prose-code:py-0.5 prose-headings:text-inherit text-inherit prose-code:before:content-none prose-code:after:content-none dark:prose-code:bg-white/10">
 														<Markdown>{msg.content}</Markdown>

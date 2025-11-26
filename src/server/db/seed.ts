@@ -180,7 +180,7 @@ async function main() {
 			{
 				id: crypto.randomUUID(),
 				userId: user1Id,
-				token: "session_token_alice_" + crypto.randomUUID(),
+				token: `session_token_alice_${crypto.randomUUID()}`,
 				expiresAt: futureDate(7), // 7 days from now
 				ipAddress: "192.168.1.100",
 				userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
@@ -189,7 +189,7 @@ async function main() {
 			{
 				id: crypto.randomUUID(),
 				userId: user2Id,
-				token: "session_token_bob_" + crypto.randomUUID(),
+				token: `session_token_bob_${crypto.randomUUID()}`,
 				expiresAt: futureDate(14), // 14 days from now
 				ipAddress: "192.168.1.101",
 				userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
