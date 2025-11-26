@@ -10,7 +10,7 @@ const openrouter = createOpenRouter({
 });
 
 // Default model for summarization and writing tasks
-const DEFAULT_MODEL = "x-ai/grok-3-fast";
+const DEFAULT_MODEL = "openrouter/bert-nebulon-alpha";
 
 export interface GenerateOptions {
 	model?: string;

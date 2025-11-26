@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Markdown from "react-markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -115,7 +116,7 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 
 	return (
 		<Dialog onOpenChange={(o) => !o && onClose()} open={open}>
-			<DialogContent className="flex max-h-[90vh] max-w-4xl flex-col">
+			<DialogContent className="!max-w-[95dvw] flex h-[95dvh] w-[95dvw] flex-col">
 				<DialogHeader>
 					<DialogTitle className="flex items-start justify-between gap-4">
 						<div className="flex-1">
@@ -224,8 +225,10 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 							{/* Description */}
 							<div>
 								<h4 className="mb-2 font-medium text-sm">Description</h4>
-								<div className="prose prose-sm max-w-none whitespace-pre-wrap text-muted-foreground">
-									{ticket.description || "No description provided."}
+								<div className="prose prose-sm prose-headings:my-2 prose-li:my-0 prose-ol:my-2 prose-p:my-2 prose-pre:my-2 prose-ul:my-2 max-w-none break-words prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-headings:text-foreground text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
+									<Markdown>
+										{ticket.description || "No description provided."}
+									</Markdown>
 								</div>
 							</div>
 
@@ -307,9 +310,11 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 											</CardTitle>
 										</CardHeader>
 										<CardContent>
-											<div className="prose prose-sm max-w-none whitespace-pre-wrap">
-												{latestRecommendation.recommendedSteps ||
-													"No steps generated."}
+											<div className="prose prose-sm prose-headings:my-2 prose-li:my-0 prose-ol:my-2 prose-p:my-2 prose-pre:my-2 prose-ul:my-2 max-w-none break-words prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:before:content-none prose-code:after:content-none">
+												<Markdown>
+													{latestRecommendation.recommendedSteps ||
+														"No steps generated."}
+												</Markdown>
 											</div>
 										</CardContent>
 									</Card>
@@ -345,11 +350,14 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 						</div>
 					</TabsContent>
 
-					<TabsContent className="flex min-h-0 flex-1 flex-col" value="chat">
-						<div className="flex min-h-0 flex-1 flex-col py-4">
+					<TabsContent
+						className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+						value="chat"
+					>
+						<div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden py-4">
 							{/* Chat messages */}
-							<ScrollArea className="flex-1 pr-4">
-								<div className="space-y-4">
+							<ScrollArea className="min-h-0 min-w-0 flex-1">
+								<div className="space-y-4 pr-4">
 									{messages.length === 0 ? (
 										<div className="py-8 text-center text-muted-foreground">
 											No messages yet. Start a conversation about this ticket.
@@ -361,15 +369,14 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 												key={msg.id}
 											>
 												<div
-													className={`max-w-[80%] rounded-lg px-4 py-2 ${
-														msg.role === "user"
+													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2 ${msg.role === "user"
 															? "bg-primary text-primary-foreground"
 															: "bg-muted"
-													}`}
+														}`}
 												>
-													<p className="whitespace-pre-wrap text-sm">
-														{msg.content}
-													</p>
+													<div className="prose prose-sm prose-headings:my-2 prose-li:my-0 prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto break-words prose-code:rounded prose-code:bg-black/10 prose-code:px-1 prose-code:py-0.5 prose-headings:text-inherit text-inherit prose-code:before:content-none prose-code:after:content-none dark:prose-code:bg-white/10">
+														<Markdown>{msg.content}</Markdown>
+													</div>
 													<p className="mt-1 text-xs opacity-60">
 														{new Date(msg.createdAt).toLocaleTimeString()}
 													</p>

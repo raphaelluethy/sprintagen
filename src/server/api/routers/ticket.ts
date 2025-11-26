@@ -3,7 +3,6 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import {
 	analyzeWithAI,
-	analyzeWithCerebras,
 	buildChatSystemPrompt,
 	buildChatUserPrompt,
 	buildRankingPrompt,
@@ -30,6 +29,7 @@ import {
 	syncAllProviders,
 	syncProvider,
 } from "@/server/tickets/sync";
+const DEFAULT_MODEL = "openrouter/bert-nebulon-alpha";
 
 export const ticketRouter = createTRPCRouter({
 	// ========================================================================
@@ -314,7 +314,7 @@ export const ticketRouter = createTRPCRouter({
 				ticketId: input.ticketId,
 				role: "assistant",
 				content: result.text,
-				modelUsed: "grok-3-fast",
+				modelUsed: "openrouter/bert-nebulon-alpha",
 			});
 
 			return { response: result.text };
@@ -389,7 +389,7 @@ export const ticketRouter = createTRPCRouter({
 					ticketId: input.ticketId,
 					recommendedSteps: stepsResult.text,
 					recommendedProgrammer: programmerResult.text || null,
-					modelUsed: "grok-3-fast",
+					modelUsed: DEFAULT_MODEL,
 				})
 				.returning();
 
@@ -462,7 +462,7 @@ export const ticketRouter = createTRPCRouter({
 				// Determine which model was used based on configuration
 				const modelUsed =
 					isOpenRouterConfigured() && !isCerebrasConfigured()
-						? "grok-3-fast"
+						? "x-ai/grok-4.1-fast:free"
 						: "llama-3.3-70b";
 
 				// Save ranking record

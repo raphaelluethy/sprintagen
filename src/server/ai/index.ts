@@ -1,6 +1,6 @@
 import { env } from "@/env";
-import { analyzeWithCerebras, GenerateOptions } from "./cerebras";
-import { generateWithOpenRouter, AnalyzeOptions } from "./openrouter";
+import { analyzeWithCerebras, type GenerateOptions } from "./cerebras";
+import { type AnalyzeOptions, generateWithOpenRouter } from "./openrouter";
 
 export {
 	analyzeWithCerebras,
