@@ -149,4 +149,3 @@ export function CreateTicketDialog({ onSuccess }: CreateTicketDialogProps) {
 		</Dialog>
 	);
 }
-

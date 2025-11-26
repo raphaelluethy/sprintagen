@@ -440,4 +440,3 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 		</Dialog>
 	);
 }
-

@@ -180,4 +180,3 @@ export async function createManualTicket(input: {
 
 	return result[0] as typeof tickets.$inferSelect;
 }
-

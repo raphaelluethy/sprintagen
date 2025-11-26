@@ -161,4 +161,3 @@ export function createLinearProvider(
 ): LinearTicketProvider {
 	return new LinearTicketProvider(config ?? {});
 }
-

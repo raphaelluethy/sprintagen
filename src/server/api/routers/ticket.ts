@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import {
+	analyzeWithAI,
 	analyzeWithCerebras,
 	buildChatSystemPrompt,
 	buildChatUserPrompt,
@@ -417,16 +418,24 @@ export const ticketRouter = createTRPCRouter({
 				});
 			}
 
-			if (!isCerebrasConfigured()) {
+			// Check if either OpenRouter or Cerebras is configured based on mode
+			const useOpenRouterOnly =
+				isOpenRouterConfigured() && !isCerebrasConfigured();
+			const useCerebrasOnly =
+				isCerebrasConfigured() && !isOpenRouterConfigured();
+			const useEither = isOpenRouterConfigured() || isCerebrasConfigured();
+
+			if (!useEither) {
 				throw new TRPCError({
 					code: "PRECONDITION_FAILED",
-					message: "Cerebras AI not configured. Set CEREBRAS_API_KEY.",
+					message:
+						"AI not configured. Set OPENROUTER_API_KEY or CEREBRAS_API_KEY.",
 				});
 			}
 
 			// Build ranking prompt
 			const { system, user } = buildRankingPrompt(ticketsToRank);
-			const result = await analyzeWithCerebras(system, user);
+			const result = await analyzeWithAI(system, user);
 
 			// Parse response
 			interface RankingResult {
@@ -450,6 +459,12 @@ export const ticketRouter = createTRPCRouter({
 			// Save rankings and update tickets
 			const savedRankings = [];
 			for (const ranking of rankings) {
+				// Determine which model was used based on configuration
+				const modelUsed =
+					isOpenRouterConfigured() && !isCerebrasConfigured()
+						? "grok-3-fast"
+						: "llama-3.3-70b";
+
 				// Save ranking record
 				const [saved] = await ctx.db
 					.insert(ticketRankings)
@@ -460,7 +475,7 @@ export const ticketRouter = createTRPCRouter({
 						complexityScore: ranking.complexityScore,
 						overallScore: ranking.overallScore,
 						reasoning: ranking.reasoning,
-						modelUsed: "llama-3.3-70b",
+						modelUsed,
 					})
 					.returning();
 
@@ -509,4 +524,3 @@ export const ticketRouter = createTRPCRouter({
 			return result;
 		}),
 });
-

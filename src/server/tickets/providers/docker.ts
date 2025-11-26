@@ -53,4 +53,3 @@ export function createDockerProvider(
 ): DockerRepoTicketProvider {
 	return new DockerRepoTicketProvider(config ?? {});
 }
-

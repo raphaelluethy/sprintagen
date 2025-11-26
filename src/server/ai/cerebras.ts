@@ -71,4 +71,3 @@ export function isCerebrasConfigured(): boolean {
 }
 
 export { cerebras, DEFAULT_MODEL as CEREBRAS_DEFAULT_MODEL };
-

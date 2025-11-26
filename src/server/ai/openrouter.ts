@@ -80,4 +80,3 @@ export function isOpenRouterConfigured(): boolean {
 }
 
 export { openrouter, DEFAULT_MODEL as OPENROUTER_DEFAULT_MODEL };
-

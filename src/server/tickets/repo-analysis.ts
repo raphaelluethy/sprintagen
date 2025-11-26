@@ -137,4 +137,3 @@ export function isRepoAnalysisAvailable(): boolean {
 	// For now, always return false since this is stubbed
 	return false && !!dockerSocket && !!opencodeImage;
 }
-
