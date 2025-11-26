@@ -178,5 +178,8 @@ export async function createManualTicket(input: {
 		})
 		.returning();
 
+	if (!result[0]) {
+		throw new Error("Failed to create ticket");
+	}
 	return result[0] as typeof tickets.$inferSelect;
 }
