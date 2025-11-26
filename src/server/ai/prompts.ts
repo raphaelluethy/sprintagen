@@ -227,4 +227,3 @@ export function buildRepoContextPrompt(
 
 	return { system, user };
 }
-

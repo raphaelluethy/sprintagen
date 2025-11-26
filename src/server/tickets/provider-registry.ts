@@ -90,4 +90,3 @@ export function getProviderRegistry(): TicketProviderRegistry {
 	}
 	return registryInstance;
 }
-

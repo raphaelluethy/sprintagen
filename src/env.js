@@ -24,6 +24,7 @@ export const env = createEnv({
 		// AI Providers (optional in development)
 		OPENROUTER_API_KEY: z.string().optional(),
 		CEREBRAS_API_KEY: z.string().optional(),
+		AI_PROVIDER_MODE: z.enum(["openrouter-only", "full"]).default("full"),
 
 		// Jira Provider (optional)
 		JIRA_BASE_URL: z.string().url().optional(),
@@ -65,6 +66,7 @@ export const env = createEnv({
 		// AI Providers
 		OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
 		CEREBRAS_API_KEY: process.env.CEREBRAS_API_KEY,
+		AI_PROVIDER_MODE: process.env.AI_PROVIDER_MODE,
 
 		// Jira Provider
 		JIRA_BASE_URL: process.env.JIRA_BASE_URL,

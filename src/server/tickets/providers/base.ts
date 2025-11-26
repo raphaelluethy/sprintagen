@@ -124,4 +124,3 @@ export abstract class BaseTicketProvider implements ITicketProvider {
 		return priorityMap[normalized] ?? "medium";
 	}
 }
-

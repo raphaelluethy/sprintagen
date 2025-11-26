@@ -275,4 +275,3 @@ export function TicketTable({ onTicketSelect }: TicketTableProps) {
 		</div>
 	);
 }
-
