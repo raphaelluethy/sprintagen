@@ -1,0 +1,49 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount source code for live reloading
+      - .:/app
+      # Named volume for node_modules to avoid clobbering
+      - node_modules:/app/node_modules
+    environment:
+      - NODE_ENV=development
+      - OPENCODE_SERVER_URL=http://opencode:4096
+    env_file:
+      - .env
+    depends_on:
+      - opencode
+    networks:
+      - sprintagen-network
+
+  opencode:
+    build:
+      context: .
+      dockerfile: Dockerfile.opencode
+    ports:
+      - "4096:4096"
+    environment:
+      # Set GIT_REPO_URL to clone a repository (or mount a volume instead)
+      - GIT_REPO_URL=${GIT_REPO_URL:-https://github.com/raphaelluethy/nvim}
+    volumes:
+      # Mount a local repository read-only (alternative to GIT_REPO_URL)
+      # Uncomment and adjust path as needed:
+      # - ./my-repo:/workspace/repo:ro
+
+      # Persist opencode config and auth tokens
+      - opencode_data:/root/.opencode
+    networks:
+      - sprintagen-network
+
+volumes:
+  node_modules:
+  opencode_data:
+
+networks:
+  sprintagen-network:
+    driver: bridge

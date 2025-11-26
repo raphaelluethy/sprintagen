@@ -1,0 +1,24 @@
+# Dockerfile for Opencode server
+# Using Debian-based image (not Alpine) because opencode binary requires glibc
+FROM oven/bun:1-debian AS base
+
+WORKDIR /workspace
+
+# Install git for repo cloning, curl for health checks, and ca-certificates for SSL
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    bash \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install opencode CLI globally
+RUN bun install -g opencode-ai
+
+# Copy entrypoint script
+COPY entrypoint-opencode.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 4096
+
+ENTRYPOINT ["/entrypoint.sh"]
