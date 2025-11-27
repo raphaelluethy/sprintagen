@@ -9,27 +9,27 @@ import { fetchFromOpencode } from "@/lib/opencode";
  * Returns array of Agent.Info objects with fields: { name, description?, mode?, builtIn? }
  */
 export async function GET() {
-    try {
-        const response = await fetchFromOpencode("/agent", {
-            method: "GET",
-            headers: { "Content-Type": "application/json" },
-        });
+	try {
+		const response = await fetchFromOpencode("/agent", {
+			method: "GET",
+			headers: { "Content-Type": "application/json" },
+		});
 
-        if (!response.ok) {
-            return NextResponse.json(
-                { error: `Opencode server returned ${response.status}` },
-                { status: response.status }
-            );
-        }
+		if (!response.ok) {
+			return NextResponse.json(
+				{ error: `Opencode server returned ${response.status}` },
+				{ status: response.status },
+			);
+		}
 
-        const data = await response.json();
-        return NextResponse.json(data);
-    } catch (error) {
-        const message =
-            error instanceof Error ? error.message : "Unknown error occurred";
-        return NextResponse.json(
-            { error: `Failed to fetch agents: ${message}` },
-            { status: 500 }
-        );
-    }
+		const data = await response.json();
+		return NextResponse.json(data);
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Unknown error occurred";
+		return NextResponse.json(
+			{ error: `Failed to fetch agents: ${message}` },
+			{ status: 500 },
+		);
+	}
 }

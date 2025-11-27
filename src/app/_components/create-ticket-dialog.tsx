@@ -62,18 +62,24 @@ export function CreateTicketDialog({ onSuccess }: CreateTicketDialogProps) {
 	return (
 		<Dialog onOpenChange={setOpen} open={open}>
 			<DialogTrigger asChild>
-				<Button>New Ticket</Button>
+				<Button size="sm">New Ticket</Button>
 			</DialogTrigger>
-			<DialogContent>
+			<DialogContent className="border-border/40 bg-background sm:max-w-md">
 				<DialogHeader>
-					<DialogTitle>Create New Ticket</DialogTitle>
+					<DialogTitle className="font-semibold text-lg">
+						Create New Ticket
+					</DialogTitle>
 				</DialogHeader>
-				<form className="space-y-4" onSubmit={handleSubmit}>
+				<form className="mt-4 space-y-4" onSubmit={handleSubmit}>
 					<div className="space-y-2">
-						<label className="font-medium text-sm" htmlFor="title">
+						<label
+							className="text-muted-foreground text-xs uppercase tracking-wider"
+							htmlFor="title"
+						>
 							Title
 						</label>
 						<Input
+							className="h-10"
 							id="title"
 							onChange={(e) => setTitle(e.target.value)}
 							placeholder="Enter ticket title..."
@@ -83,28 +89,34 @@ export function CreateTicketDialog({ onSuccess }: CreateTicketDialogProps) {
 					</div>
 
 					<div className="space-y-2">
-						<label className="font-medium text-sm" htmlFor="description">
+						<label
+							className="text-muted-foreground text-xs uppercase tracking-wider"
+							htmlFor="description"
+						>
 							Description
 						</label>
 						<Textarea
+							className="min-h-[100px] resize-none"
 							id="description"
 							onChange={(e) => setDescription(e.target.value)}
 							placeholder="Describe the ticket..."
-							rows={4}
 							value={description}
 						/>
 					</div>
 
 					<div className="grid grid-cols-2 gap-4">
 						<div className="space-y-2">
-							<label className="font-medium text-sm" htmlFor="priority">
+							<label
+								className="text-muted-foreground text-xs uppercase tracking-wider"
+								htmlFor="priority"
+							>
 								Priority
 							</label>
 							<Select
 								onValueChange={(v) => setPriority(v as typeof priority)}
 								value={priority}
 							>
-								<SelectTrigger>
+								<SelectTrigger className="h-10">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
@@ -117,10 +129,14 @@ export function CreateTicketDialog({ onSuccess }: CreateTicketDialogProps) {
 						</div>
 
 						<div className="space-y-2">
-							<label className="font-medium text-sm" htmlFor="assignee">
+							<label
+								className="text-muted-foreground text-xs uppercase tracking-wider"
+								htmlFor="assignee"
+							>
 								Assignee
 							</label>
 							<Input
+								className="h-10"
 								id="assignee"
 								onChange={(e) => setAssignee(e.target.value)}
 								placeholder="Assignee name..."

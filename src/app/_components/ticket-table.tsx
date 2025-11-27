@@ -35,19 +35,19 @@ interface TicketTableProps {
 	onTicketSelect: (ticket: Ticket) => void;
 }
 
-const priorityColors: Record<string, string> = {
-	urgent: "bg-red-500/10 text-red-600 border-red-200",
-	high: "bg-orange-500/10 text-orange-600 border-orange-200",
-	medium: "bg-yellow-500/10 text-yellow-600 border-yellow-200",
-	low: "bg-green-500/10 text-green-600 border-green-200",
+const priorityStyles: Record<string, string> = {
+	urgent: "bg-foreground text-background",
+	high: "bg-foreground/80 text-background",
+	medium: "bg-secondary text-secondary-foreground",
+	low: "bg-secondary/60 text-muted-foreground",
 };
 
-const statusColors: Record<string, string> = {
-	open: "bg-blue-500/10 text-blue-600 border-blue-200",
-	in_progress: "bg-purple-500/10 text-purple-600 border-purple-200",
-	review: "bg-cyan-500/10 text-cyan-600 border-cyan-200",
-	done: "bg-green-500/10 text-green-600 border-green-200",
-	closed: "bg-gray-500/10 text-gray-600 border-gray-200",
+const statusStyles: Record<string, string> = {
+	open: "bg-secondary text-secondary-foreground",
+	in_progress: "bg-foreground/10 text-foreground border border-border/60",
+	review: "bg-foreground/10 text-foreground border border-border/60",
+	done: "bg-secondary/60 text-muted-foreground",
+	closed: "bg-secondary/40 text-muted-foreground",
 };
 
 export function TicketTable({ onTicketSelect }: TicketTableProps) {
@@ -104,12 +104,12 @@ export function TicketTable({ onTicketSelect }: TicketTableProps) {
 
 	if (isLoading) {
 		return (
-			<div className="space-y-3">
-				<Skeleton className="h-16 w-full" />
-				<Skeleton className="h-16 w-full" />
-				<Skeleton className="h-16 w-full" />
-				<Skeleton className="h-16 w-full" />
-				<Skeleton className="h-16 w-full" />
+			<div className="space-y-2">
+				<Skeleton className="h-14 w-full rounded-lg" />
+				<Skeleton className="h-14 w-full rounded-lg" />
+				<Skeleton className="h-14 w-full rounded-lg" />
+				<Skeleton className="h-14 w-full rounded-lg" />
+				<Skeleton className="h-14 w-full rounded-lg" />
 			</div>
 		);
 	}
@@ -119,12 +119,14 @@ export function TicketTable({ onTicketSelect }: TicketTableProps) {
 			{/* Controls */}
 			<div className="flex flex-wrap items-center gap-3">
 				<div className="flex items-center gap-2">
-					<span className="text-muted-foreground text-sm">View:</span>
+					<span className="text-muted-foreground text-xs uppercase tracking-wider">
+						View
+					</span>
 					<Select
 						onValueChange={(v) => setViewMode(v as "standard" | "ai-ranked")}
 						value={viewMode}
 					>
-						<SelectTrigger className="w-[140px]">
+						<SelectTrigger className="h-8 w-[120px] text-xs">
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
@@ -137,12 +139,14 @@ export function TicketTable({ onTicketSelect }: TicketTableProps) {
 				{viewMode === "standard" && (
 					<>
 						<div className="flex items-center gap-2">
-							<span className="text-muted-foreground text-sm">Sort:</span>
+							<span className="text-muted-foreground text-xs uppercase tracking-wider">
+								Sort
+							</span>
 							<Select
 								onValueChange={(v) => setSortBy(v as typeof sortBy)}
 								value={sortBy}
 							>
-								<SelectTrigger className="w-[120px]">
+								<SelectTrigger className="h-8 w-[100px] text-xs">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
@@ -152,6 +156,7 @@ export function TicketTable({ onTicketSelect }: TicketTableProps) {
 								</SelectContent>
 							</Select>
 							<Button
+								className="h-8 w-8 p-0"
 								onClick={() =>
 									setSortOrder((o) => (o === "asc" ? "desc" : "asc"))
 								}
@@ -163,9 +168,11 @@ export function TicketTable({ onTicketSelect }: TicketTableProps) {
 						</div>
 
 						<div className="flex items-center gap-2">
-							<span className="text-muted-foreground text-sm">Status:</span>
+							<span className="text-muted-foreground text-xs uppercase tracking-wider">
+								Status
+							</span>
 							<Select onValueChange={setStatusFilter} value={statusFilter}>
-								<SelectTrigger className="w-[130px]">
+								<SelectTrigger className="h-8 w-[110px] text-xs">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
@@ -194,23 +201,37 @@ export function TicketTable({ onTicketSelect }: TicketTableProps) {
 			</div>
 
 			{/* Table */}
-			<div className="rounded-lg border">
+			<div className="overflow-hidden rounded-lg border border-border/40">
 				<Table>
 					<TableHeader>
-						<TableRow>
-							<TableHead className="w-[40%]">Title</TableHead>
-							<TableHead>Status</TableHead>
-							<TableHead>Priority</TableHead>
-							<TableHead>Provider</TableHead>
-							{viewMode === "ai-ranked" && <TableHead>AI Score</TableHead>}
-							<TableHead className="text-right">Created</TableHead>
+						<TableRow className="border-border/40 hover:bg-transparent">
+							<TableHead className="w-[45%] font-normal text-muted-foreground text-xs uppercase tracking-wider">
+								Title
+							</TableHead>
+							<TableHead className="font-normal text-muted-foreground text-xs uppercase tracking-wider">
+								Status
+							</TableHead>
+							<TableHead className="font-normal text-muted-foreground text-xs uppercase tracking-wider">
+								Priority
+							</TableHead>
+							<TableHead className="font-normal text-muted-foreground text-xs uppercase tracking-wider">
+								Provider
+							</TableHead>
+							{viewMode === "ai-ranked" && (
+								<TableHead className="font-normal text-muted-foreground text-xs uppercase tracking-wider">
+									Score
+								</TableHead>
+							)}
+							<TableHead className="text-right font-normal text-muted-foreground text-xs uppercase tracking-wider">
+								Created
+							</TableHead>
 						</TableRow>
 					</TableHeader>
 					<TableBody>
 						{tickets?.length === 0 ? (
 							<TableRow>
 								<TableCell
-									className="py-8 text-center text-muted-foreground"
+									className="py-12 text-center text-muted-foreground"
 									colSpan={viewMode === "ai-ranked" ? 6 : 5}
 								>
 									No tickets found. Create one or sync from a provider.
@@ -219,51 +240,51 @@ export function TicketTable({ onTicketSelect }: TicketTableProps) {
 						) : (
 							tickets?.map((ticket) => (
 								<TableRow
-									className="cursor-pointer transition-colors hover:bg-muted/50"
+									className="cursor-pointer border-border/40 transition-colors hover:bg-secondary/30"
 									key={ticket.id}
 									onClick={() => onTicketSelect(ticket)}
 								>
-									<TableCell>
-										<div className="font-medium">{ticket.title}</div>
+									<TableCell className="py-3">
+										<div className="font-medium text-sm">{ticket.title}</div>
 										{ticket.assignee && (
-											<div className="text-muted-foreground text-sm">
+											<div className="mt-0.5 text-muted-foreground text-xs">
 												{ticket.assignee}
 											</div>
 										)}
 									</TableCell>
 									<TableCell>
 										<Badge
-											className={statusColors[ticket.status]}
-											variant="outline"
+											className={`font-normal text-xs ${statusStyles[ticket.status]}`}
+											variant="secondary"
 										>
 											{ticket.status.replace("_", " ")}
 										</Badge>
 									</TableCell>
 									<TableCell>
 										<Badge
-											className={priorityColors[ticket.priority ?? "medium"]}
-											variant="outline"
+											className={`font-normal text-xs ${priorityStyles[ticket.priority ?? "medium"]}`}
+											variant="secondary"
 										>
 											{ticket.priority}
 										</Badge>
 									</TableCell>
 									<TableCell>
-										<span className="text-muted-foreground text-sm capitalize">
+										<span className="text-muted-foreground text-xs capitalize">
 											{ticket.provider}
 										</span>
 									</TableCell>
 									{viewMode === "ai-ranked" && (
 										<TableCell>
 											{ticket.aiScore !== null ? (
-												<Badge className="font-mono" variant="secondary">
+												<span className="font-mono text-sm tabular-nums">
 													{ticket.aiScore.toFixed(1)}
-												</Badge>
+												</span>
 											) : (
 												<span className="text-muted-foreground">—</span>
 											)}
 										</TableCell>
 									)}
-									<TableCell className="text-right text-muted-foreground text-sm">
+									<TableCell className="text-right text-muted-foreground text-xs tabular-nums">
 										{new Date(ticket.createdAt).toLocaleDateString()}
 									</TableCell>
 								</TableRow>

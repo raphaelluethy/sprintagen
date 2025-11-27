@@ -7,8 +7,8 @@ import { TicketModal } from "@/app/_components/ticket-modal";
 import { TicketTable } from "@/app/_components/ticket-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Card, CardContent } from "@/components/ui/card";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import type {
 	ticketRankings,
 	ticketRecommendations,
@@ -63,176 +63,151 @@ export default function Dashboard() {
 	) ?? { total: 0 };
 
 	return (
-		<div className="min-h-screen bg-background">
+		<div className="min-h-screen">
 			{/* Header */}
-			<header className="border-b bg-card">
-				<div className="container mx-auto px-4 py-4">
-					<div className="flex items-center justify-between">
-						<div className="flex items-center gap-6">
-							<div>
-								<h1 className="font-bold text-2xl tracking-tight">
-									Sprintagen
-								</h1>
-								<p className="text-muted-foreground text-sm">
-									AI-powered ticket management
-								</p>
-							</div>
-							{/* Opencode Navigation */}
-							<div className="flex items-center gap-2">
-								<Link
-									className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm transition-colors hover:border-emerald-500/50 hover:bg-emerald-500/10"
-									href="/admin/chats"
-								>
-									<svg
-										aria-hidden="true"
-										className="h-4 w-4 text-emerald-500"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path
-											d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth={2}
-										/>
-									</svg>
-									Opencode Chat
-								</Link>
-								<a
-									className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm transition-colors hover:border-teal-500/50 hover:bg-teal-500/10"
-									href="http://localhost:4096"
-									rel="noopener noreferrer"
-									target="_blank"
-								>
-									<svg
-										aria-hidden="true"
-										className="h-4 w-4 text-teal-500"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path
-											d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth={2}
-										/>
-									</svg>
-									Opencode UI
-								</a>
-							</div>
-						</div>
+			<header className="sticky top-0 z-50 border-border/40 border-b bg-background/80 backdrop-blur-sm">
+				<div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+					<div className="flex items-center gap-8">
 						<div className="flex items-center gap-3">
-							<Button
-								disabled={syncMutation.isPending}
-								onClick={() => syncMutation.mutate()}
-								variant="outline"
-							>
-								{syncMutation.isPending ? "Syncing..." : "Sync Tickets"}
-							</Button>
-							<CreateTicketDialog />
+							<div className="flex h-8 w-8 items-center justify-center rounded-md bg-foreground">
+								<span className="font-bold text-background text-sm">S</span>
+							</div>
+							<span className="font-semibold text-lg tracking-tight">
+								Sprintagen
+							</span>
 						</div>
+						{/* Navigation */}
+						<nav className="hidden items-center gap-1 md:flex">
+							<Link
+								className="rounded-md px-3 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-secondary hover:text-foreground"
+								href="/admin/chats"
+							>
+								Chat
+							</Link>
+							<a
+								className="rounded-md px-3 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-secondary hover:text-foreground"
+								href="http://localhost:4096"
+								rel="noopener noreferrer"
+								target="_blank"
+							>
+								Opencode
+							</a>
+						</nav>
+					</div>
+					<div className="flex items-center gap-3">
+						<ThemeToggle />
+						<Button
+							disabled={syncMutation.isPending}
+							onClick={() => syncMutation.mutate()}
+							size="sm"
+							variant="outline"
+						>
+							{syncMutation.isPending ? "Syncing..." : "Sync"}
+						</Button>
+						<CreateTicketDialog />
 					</div>
 				</div>
 			</header>
 
-			<main className="container mx-auto px-4 py-6">
-				{/* Status Cards */}
-				<div className="mb-6 grid gap-4 md:grid-cols-4">
-					<Card>
-						<CardHeader className="pb-2">
-							<CardTitle className="font-medium text-muted-foreground text-sm">
-								Total Tickets
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="font-bold text-3xl">{ticketCounts.total}</div>
+			<main className="mx-auto max-w-7xl px-6 py-8">
+				{/* Stats Grid */}
+				<div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+					<Card className="border-border/40 bg-card/50">
+						<CardContent className="p-4">
+							<p className="text-muted-foreground text-xs uppercase tracking-wider">
+								Total
+							</p>
+							<p className="mt-1 font-light font-mono text-3xl tabular-nums">
+								{ticketCounts.total}
+							</p>
 						</CardContent>
 					</Card>
-
-					<Card>
-						<CardHeader className="pb-2">
-							<CardTitle className="font-medium text-muted-foreground text-sm">
+					<Card className="border-border/40 bg-card/50">
+						<CardContent className="p-4">
+							<p className="text-muted-foreground text-xs uppercase tracking-wider">
 								Open
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="font-bold text-3xl text-blue-600">
+							</p>
+							<p className="mt-1 font-light font-mono text-3xl tabular-nums">
 								{ticketCounts.open ?? 0}
-							</div>
+							</p>
 						</CardContent>
 					</Card>
-
-					<Card>
-						<CardHeader className="pb-2">
-							<CardTitle className="font-medium text-muted-foreground text-sm">
+					<Card className="border-border/40 bg-card/50">
+						<CardContent className="p-4">
+							<p className="text-muted-foreground text-xs uppercase tracking-wider">
 								In Progress
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="font-bold text-3xl text-purple-600">
+							</p>
+							<p className="mt-1 font-light font-mono text-3xl tabular-nums">
 								{ticketCounts.in_progress ?? 0}
-							</div>
+							</p>
 						</CardContent>
 					</Card>
-
-					<Card>
-						<CardHeader className="pb-2">
-							<CardTitle className="font-medium text-muted-foreground text-sm">
+					<Card className="border-border/40 bg-card/50">
+						<CardContent className="p-4">
+							<p className="text-muted-foreground text-xs uppercase tracking-wider">
 								Done
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="font-bold text-3xl text-green-600">
+							</p>
+							<p className="mt-1 font-light font-mono text-3xl tabular-nums">
 								{ticketCounts.done ?? 0}
-							</div>
+							</p>
 						</CardContent>
 					</Card>
 				</div>
 
 				{/* Integration Status */}
-				<div className="mb-6 flex flex-wrap items-center gap-4 rounded-lg bg-muted/50 p-4">
-					<span className="font-medium text-sm">Integrations:</span>
-					<div className="flex flex-wrap gap-2">
+				<div className="mb-8 flex flex-wrap items-center gap-3 rounded-lg border border-border/40 bg-card/30 px-4 py-3">
+					<span className="text-muted-foreground text-xs uppercase tracking-wider">
+						Integrations
+					</span>
+					<div className="flex flex-wrap gap-1.5">
 						{providerStatus.data?.map((provider) => (
 							<Badge
-								className="capitalize"
+								className="font-normal capitalize"
 								key={provider.name}
-								variant={provider.configured ? "default" : "secondary"}
+								variant={provider.configured ? "default" : "outline"}
 							>
-								{provider.name} {provider.configured ? "✓" : "○"}
+								{provider.name}
 							</Badge>
 						))}
 					</div>
-					<Separator className="h-4" orientation="vertical" />
-					<span className="font-medium text-sm">AI:</span>
-					<div className="flex gap-2">
+					<div className="mx-2 h-4 w-px bg-border" />
+					<span className="text-muted-foreground text-xs uppercase tracking-wider">
+						AI
+					</span>
+					<div className="flex gap-1.5">
 						<Badge
+							className="font-normal"
 							variant={
-								aiStatus.data?.openRouterConfigured ? "default" : "secondary"
+								aiStatus.data?.openRouterConfigured ? "default" : "outline"
 							}
 						>
-							Chat {aiStatus.data?.openRouterConfigured ? "✓" : "○"}
+							Chat
 						</Badge>
 						<Badge
+							className="font-normal"
 							variant={
-								aiStatus.data?.cerebrasConfigured ? "default" : "secondary"
+								aiStatus.data?.cerebrasConfigured ? "default" : "outline"
 							}
 						>
-							Ranking {aiStatus.data?.cerebrasConfigured ? "✓" : "○"}
+							Ranking
 						</Badge>
 					</div>
 				</div>
 
 				{/* Sync Results */}
 				{syncMutation.data && (
-					<div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950">
-						<p className="text-green-800 text-sm dark:text-green-200">
-							Sync complete: {syncMutation.data.totalCreated} created,{" "}
-							{syncMutation.data.totalUpdated} updated
+					<div className="mb-6 rounded-lg border border-border/40 bg-card/30 px-4 py-3">
+						<p className="text-muted-foreground text-sm">
+							Sync complete:{" "}
+							<span className="text-foreground">
+								{syncMutation.data.totalCreated} created
+							</span>
+							,{" "}
+							<span className="text-foreground">
+								{syncMutation.data.totalUpdated} updated
+							</span>
 							{syncMutation.data.totalErrors > 0 && (
-								<span className="text-orange-600 dark:text-orange-400">
+								<span className="text-destructive">
 									{" "}
 									({syncMutation.data.totalErrors} errors)
 								</span>
