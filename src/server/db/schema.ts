@@ -90,6 +90,7 @@ export const ticketRecommendations = sqliteTable(
 		recommendedSteps: d.text(),
 		recommendedProgrammer: d.text({ length: 255 }),
 		reasoning: d.text(),
+		opencodeSummary: d.text(),
 		modelUsed: d.text({ length: 100 }),
 		createdAt: d
 			.integer({ mode: "timestamp" })

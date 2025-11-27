@@ -29,6 +29,15 @@ type Ticket = typeof tickets.$inferSelect & {
 	messages?: (typeof ticketMessages.$inferSelect)[];
 };
 
+interface OpencodeChatMessage {
+	id: string;
+	role: "user" | "assistant";
+	text: string;
+	createdAt: Date;
+	model?: string;
+	toolCalls?: { toolName: string; toolCallId: string }[];
+}
+
 interface TicketModalProps {
 	ticket: Ticket | null;
 	open: boolean;
@@ -52,8 +61,13 @@ const statusStyles: Record<string, string> = {
 
 export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 	const [chatInput, setChatInput] = useState("");
+	const [opencodeChatInput, setOpencodeChatInput] = useState("");
 	const [activeTab, setActiveTab] = useState("details");
+	const [optimisticOpencodeMessages, setOptimisticOpencodeMessages] = useState<
+		OpencodeChatMessage[]
+	>([]);
 	const chatEndRef = useRef<HTMLDivElement>(null);
+	const opencodeChatEndRef = useRef<HTMLDivElement>(null);
 
 	// Fetch full ticket data with messages
 	const ticketQuery = api.ticket.byId.useQuery(
@@ -63,6 +77,24 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 
 	const fullTicket = ticketQuery.data ?? ticket;
 	const messages = fullTicket?.messages ?? [];
+
+	// Opencode status and chat queries
+	const opencodeStatusQuery = api.ticket.getOpencodeStatus.useQuery(undefined, {
+		enabled: open,
+		staleTime: 30000, // Cache for 30 seconds
+	});
+
+	const opencodeChatQuery = api.ticket.getOpencodeChat.useQuery(
+		{ ticketId: ticket?.id ?? "" },
+		{
+			enabled: !!ticket?.id && open && activeTab === "opencode",
+		},
+	);
+
+	const opencodeMessages = [
+		...(opencodeChatQuery.data ?? []),
+		...optimisticOpencodeMessages,
+	];
 
 	// Mutations
 	const chatMutation = api.ticket.chat.useMutation({
@@ -85,10 +117,45 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 		},
 	});
 
+	// Opencode mutations
+	const sendOpencodeMutation = api.ticket.sendOpencodeChatMessage.useMutation({
+		onMutate: (variables) => {
+			// Add optimistic user message
+			const optimisticMessage: OpencodeChatMessage = {
+				id: `optimistic-${Date.now()}`,
+				role: "user",
+				text: variables.message,
+				createdAt: new Date(),
+			};
+			setOptimisticOpencodeMessages((prev) => [...prev, optimisticMessage]);
+			setOpencodeChatInput("");
+		},
+		onSuccess: () => {
+			setOptimisticOpencodeMessages([]);
+			void opencodeChatQuery.refetch();
+		},
+		onError: () => {
+			setOptimisticOpencodeMessages([]);
+		},
+	});
+
+	const askOpencodeMutation = api.ticket.askOpencode.useMutation({
+		onSuccess: () => {
+			void ticketQuery.refetch();
+		},
+	});
+
 	// Scroll to bottom when messages change
 	useEffect(() => {
 		if (messages.length > 0) {
 			chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+		}
+	});
+
+	// Scroll to bottom when opencode messages change
+	useEffect(() => {
+		if (opencodeMessages.length > 0) {
+			opencodeChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
 		}
 	});
 
@@ -97,6 +164,21 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 		chatMutation.mutate({
 			ticketId: ticket.id,
 			message: chatInput.trim(),
+		});
+	};
+
+	const handleSendOpencodeMessage = () => {
+		if (!opencodeChatInput.trim() || !ticket?.id) return;
+		sendOpencodeMutation.mutate({
+			ticketId: ticket.id,
+			message: opencodeChatInput.trim(),
+		});
+	};
+
+	const handleAskOpencode = () => {
+		if (!ticket?.id) return;
+		askOpencodeMutation.mutate({
+			ticketId: ticket.id,
 		});
 	};
 
@@ -110,6 +192,7 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 
 	const latestRecommendation = fullTicket?.recommendations?.[0];
 	const latestRanking = fullTicket?.rankings?.[0];
+	const opencodeAvailable = opencodeStatusQuery.data?.available ?? false;
 
 	if (!ticket) return null;
 
@@ -169,7 +252,7 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 					onValueChange={setActiveTab}
 					value={activeTab}
 				>
-					<TabsList className="mx-6 mt-4 grid w-fit grid-cols-3 bg-secondary/50">
+					<TabsList className="mx-6 mt-4 grid w-fit grid-cols-4 bg-secondary/50">
 						<TabsTrigger className="text-xs" value="details">
 							Details
 						</TabsTrigger>
@@ -178,6 +261,9 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 						</TabsTrigger>
 						<TabsTrigger className="text-xs" value="chat">
 							Chat
+						</TabsTrigger>
+						<TabsTrigger className="text-xs" value="opencode">
+							Opencode
 						</TabsTrigger>
 					</TabsList>
 
@@ -314,7 +400,22 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 						value="recommendations"
 					>
 						<div className="space-y-4">
-							<div className="flex justify-end">
+							<div className="flex flex-wrap items-center justify-end gap-2">
+								<Button
+									disabled={!opencodeAvailable || askOpencodeMutation.isPending}
+									onClick={handleAskOpencode}
+									size="sm"
+									variant="outline"
+								>
+									{askOpencodeMutation.isPending
+										? "Analyzing..."
+										: "Ask Opencode"}
+									{!opencodeAvailable && (
+										<span className="ml-1 text-muted-foreground text-xs">
+											(unavailable)
+										</span>
+									)}
+								</Button>
 								<Button
 									disabled={recommendationsMutation.isPending}
 									onClick={handleGenerateRecommendations}
@@ -327,7 +428,8 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 								</Button>
 							</div>
 
-							{recommendationsMutation.isPending ? (
+							{recommendationsMutation.isPending ||
+							askOpencodeMutation.isPending ? (
 								<div className="space-y-3">
 									<Skeleton className="h-4 w-full" />
 									<Skeleton className="h-4 w-3/4" />
@@ -335,17 +437,18 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 								</div>
 							) : latestRecommendation ? (
 								<div className="space-y-6">
-									<div>
-										<span className="text-muted-foreground text-xs uppercase tracking-wider">
-											Recommended Steps
-										</span>
-										<div className="prose prose-sm prose-invert mt-3 max-w-none prose-code:rounded prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
-											<Markdown>
-												{latestRecommendation.recommendedSteps ||
-													"No steps generated."}
-											</Markdown>
+									{latestRecommendation.recommendedSteps && (
+										<div>
+											<span className="text-muted-foreground text-xs uppercase tracking-wider">
+												Recommended Steps
+											</span>
+											<div className="prose prose-sm prose-invert mt-3 max-w-none prose-code:rounded prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
+												<Markdown>
+													{latestRecommendation.recommendedSteps}
+												</Markdown>
+											</div>
 										</div>
-									</div>
+									)}
 
 									{latestRecommendation.recommendedProgrammer && (
 										<div>
@@ -356,6 +459,22 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 												{latestRecommendation.recommendedProgrammer}
 											</p>
 										</div>
+									)}
+
+									{latestRecommendation.opencodeSummary && (
+										<>
+											<div className="h-px bg-border/40" />
+											<div>
+												<span className="text-muted-foreground text-xs uppercase tracking-wider">
+													Opencode Analysis
+												</span>
+												<div className="prose prose-sm prose-invert mt-3 max-w-none prose-code:rounded prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
+													<Markdown>
+														{latestRecommendation.opencodeSummary}
+													</Markdown>
+												</div>
+											</div>
+										</>
 									)}
 
 									<p className="text-muted-foreground text-xs">
@@ -372,7 +491,8 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 									</p>
 									<p className="text-muted-foreground/60 text-xs">
 										Click &ldquo;Regenerate&rdquo; to generate AI
-										recommendations
+										recommendations or &ldquo;Ask Opencode&rdquo; for
+										implementation analysis
 									</p>
 								</div>
 							)}
@@ -473,6 +593,121 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 									</Button>
 								)}
 							</div>
+						</div>
+					</TabsContent>
+
+					<TabsContent
+						className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden"
+						value="opencode"
+					>
+						<div className="flex min-h-0 flex-1 flex-col px-6 py-4">
+							{!opencodeAvailable ? (
+								<div className="flex flex-col items-center justify-center py-12 text-center">
+									<p className="text-muted-foreground text-sm">
+										Opencode is not available
+									</p>
+									<p className="text-muted-foreground/60 text-xs">
+										Make sure the Opencode server is running and configured
+									</p>
+								</div>
+							) : (
+								<>
+									{/* Opencode chat messages */}
+									<ScrollArea className="min-h-0 flex-1">
+										<div className="space-y-3 pr-4">
+											{opencodeChatQuery.isLoading ? (
+												<div className="space-y-3">
+													<Skeleton className="h-12 w-3/4" />
+													<Skeleton className="ml-auto h-8 w-1/2" />
+													<Skeleton className="h-16 w-4/5" />
+												</div>
+											) : opencodeMessages.length === 0 ? (
+												<div className="flex flex-col items-center justify-center py-12 text-center">
+													<p className="text-muted-foreground text-sm">
+														No messages yet
+													</p>
+													<p className="text-muted-foreground/60 text-xs">
+														Start a conversation with Opencode about this ticket
+													</p>
+												</div>
+											) : (
+												opencodeMessages.map((msg) => (
+													<div
+														className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+														key={msg.id}
+													>
+														<div
+															className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${
+																msg.role === "user"
+																	? "bg-foreground text-background"
+																	: "border border-border/60 bg-card/50"
+															}`}
+														>
+															<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
+																<Markdown>{msg.text}</Markdown>
+															</div>
+															<div className="mt-1 flex items-center gap-2 text-xs tabular-nums opacity-50">
+																<span>
+																	{new Date(msg.createdAt).toLocaleTimeString()}
+																</span>
+																{msg.model && (
+																	<Badge
+																		className="h-4 px-1 font-normal text-[10px]"
+																		variant="outline"
+																	>
+																		{msg.model}
+																	</Badge>
+																)}
+															</div>
+														</div>
+													</div>
+												))
+											)}
+											{sendOpencodeMutation.isPending && (
+												<div className="flex justify-start">
+													<div className="rounded-lg border border-border/60 bg-card/50 px-4 py-2.5">
+														<div className="flex items-center gap-1.5">
+															<div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" />
+															<div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:0.1s]" />
+															<div className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:0.2s]" />
+														</div>
+													</div>
+												</div>
+											)}
+											<div ref={opencodeChatEndRef} />
+										</div>
+									</ScrollArea>
+
+									{/* Opencode chat input */}
+									<div className="mt-4 space-y-2">
+										<div className="flex gap-2">
+											<Textarea
+												className="min-h-[44px] resize-none text-sm"
+												disabled={sendOpencodeMutation.isPending}
+												onChange={(e) => setOpencodeChatInput(e.target.value)}
+												onKeyDown={(e) => {
+													if (e.key === "Enter" && !e.shiftKey) {
+														e.preventDefault();
+														handleSendOpencodeMessage();
+													}
+												}}
+												placeholder="Ask Opencode about this ticket..."
+												value={opencodeChatInput}
+											/>
+											<Button
+												className="h-auto px-4"
+												disabled={
+													!opencodeChatInput.trim() ||
+													sendOpencodeMutation.isPending
+												}
+												onClick={handleSendOpencodeMessage}
+											>
+												Send
+											</Button>
+										</div>
+									</div>
+								</>
+							)}
 						</div>
 					</TabsContent>
 				</Tabs>

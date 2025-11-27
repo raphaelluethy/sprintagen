@@ -24,6 +24,12 @@ import {
 	ticketStatusEnum,
 	tickets,
 } from "@/server/db/schema";
+import {
+	askOpencodeQuestion,
+	checkOpencodeHealth,
+	getOpencodeMessages,
+	sendOpencodeMessage,
+} from "@/server/tickets/opencode";
 import { getProviderRegistry } from "@/server/tickets/provider-registry";
 import {
 	createManualTicket,
@@ -531,5 +537,178 @@ export const ticketRouter = createTRPCRouter({
 			});
 
 			return result;
+		}),
+
+	// ========================================================================
+	// Opencode Integration
+	// ========================================================================
+
+	/**
+	 * Check if Opencode server is available
+	 */
+	getOpencodeStatus: publicProcedure.query(async () => {
+		const available = await checkOpencodeHealth();
+		return { available };
+	}),
+
+	/**
+	 * Get Opencode chat messages for a ticket
+	 */
+	getOpencodeChat: publicProcedure
+		.input(z.object({ ticketId: z.string() }))
+		.query(async ({ ctx, input }) => {
+			// Get ticket for title
+			const ticket = await ctx.db.query.tickets.findFirst({
+				where: eq(tickets.id, input.ticketId),
+			});
+
+			if (!ticket) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Ticket not found",
+				});
+			}
+
+			const result = await getOpencodeMessages(input.ticketId, ticket.title);
+
+			if (!result.success) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: result.error,
+				});
+			}
+
+			return result.data;
+		}),
+
+	/**
+	 * Send a message to a ticket's Opencode session
+	 */
+	sendOpencodeChatMessage: publicProcedure
+		.input(
+			z.object({
+				ticketId: z.string(),
+				message: z.string().min(1),
+				agent: z.string().optional(),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			// Get ticket for title
+			const ticket = await ctx.db.query.tickets.findFirst({
+				where: eq(tickets.id, input.ticketId),
+			});
+
+			if (!ticket) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Ticket not found",
+				});
+			}
+
+			const result = await sendOpencodeMessage(
+				input.ticketId,
+				ticket.title,
+				input.message,
+				{ agent: input.agent },
+			);
+
+			if (!result.success) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: result.error,
+				});
+			}
+
+			return result.data;
+		}),
+
+	/**
+	 * Ask Opencode about implementing a ticket and store the result
+	 */
+	askOpencode: publicProcedure
+		.input(
+			z.object({
+				ticketId: z.string(),
+				question: z.string().optional(),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			// Get ticket with latest recommendation and ranking
+			const ticket = await ctx.db.query.tickets.findFirst({
+				where: eq(tickets.id, input.ticketId),
+				with: {
+					recommendations: {
+						orderBy: (r, { desc }) => desc(r.createdAt),
+						limit: 1,
+					},
+					rankings: {
+						orderBy: (r, { desc }) => desc(r.createdAt),
+						limit: 1,
+					},
+				},
+			});
+
+			if (!ticket) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Ticket not found",
+				});
+			}
+
+			// Build the prompt with ticket context
+			const latestRanking = ticket.rankings?.[0];
+			const rankingContext = latestRanking
+				? `\n\nAI Analysis:\n- Urgency: ${latestRanking.urgencyScore}/10\n- Impact: ${latestRanking.impactScore}/10\n- Complexity: ${latestRanking.complexityScore}/10\n- Overall Score: ${latestRanking.overallScore}/10\n- Reasoning: ${latestRanking.reasoning ?? "N/A"}`
+				: "";
+
+			const defaultQuestion = `Please analyze this ticket and provide:
+1. A high-level implementation plan with key steps
+2. Which files/modules in the codebase are most likely to be affected
+3. If possible, identify who last touched the relevant files using git history
+
+Be concise but thorough.`;
+
+			const prompt = `Ticket: ${ticket.title}
+Provider: ${ticket.provider}
+Status: ${ticket.status}
+Priority: ${ticket.priority ?? "medium"}
+Labels: ${(ticket.labels ?? []).join(", ") || "none"}
+${rankingContext}
+
+Description:
+${ticket.description ?? "No description provided."}
+
+---
+
+${input.question ?? defaultQuestion}`;
+
+			// Send to Opencode
+			const result = await askOpencodeQuestion(
+				input.ticketId,
+				ticket.title,
+				prompt,
+			);
+
+			if (!result.success) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: result.error,
+				});
+			}
+
+			// Create a new recommendation with the Opencode summary
+			const [recommendation] = await ctx.db
+				.insert(ticketRecommendations)
+				.values({
+					ticketId: input.ticketId,
+					opencodeSummary: result.data,
+					modelUsed: "opencode",
+				})
+				.returning();
+
+			return {
+				answer: result.data,
+				recommendation,
+			};
 		}),
 });
