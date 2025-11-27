@@ -18,7 +18,9 @@ export const env = createEnv({
 			.enum(["development", "test", "production"])
 			.default("development"),
 		// Opencode server configuration
-		OPENCODE_SERVER_URL: z.string().url().optional(),
+		OPENCODE_SERVER_URL: z.url().default("http://localhost:4096"),
+		// Optional directory scoping for opencode serve (defaults to server's cwd)
+		OPENCODE_DIRECTORY: z.string().optional(),
 		// Provider auth (e.g., "anthropic", "openai", "cerebras")
 		OPENCODE_PROVIDER_ID: z.string().optional(),
 		OPENCODE_PROVIDER_API_KEY: z.string().optional(),
@@ -46,6 +48,7 @@ export const env = createEnv({
 		NODE_ENV: process.env.NODE_ENV,
 		// Opencode
 		OPENCODE_SERVER_URL: process.env.OPENCODE_SERVER_URL,
+		OPENCODE_DIRECTORY: process.env.OPENCODE_DIRECTORY,
 		OPENCODE_PROVIDER_ID: process.env.OPENCODE_PROVIDER_ID,
 		OPENCODE_PROVIDER_API_KEY: process.env.OPENCODE_PROVIDER_API_KEY,
 	},

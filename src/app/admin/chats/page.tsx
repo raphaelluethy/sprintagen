@@ -8,11 +8,204 @@ interface Session {
 	createdAt?: string;
 }
 
-interface Message {
+// Opencode API response types - based on SDK types.gen.ts
+
+interface UserMessageInfo {
 	id: string;
-	role: "user" | "assistant" | "system";
-	content: string;
-	createdAt?: string;
+	sessionID: string;
+	role: "user";
+	time: {
+		created: number;
+	};
+	summary?: {
+		title?: string;
+		body?: string;
+		diffs: Array<{
+			file: string;
+			before: string;
+			after: string;
+			additions: number;
+			deletions: number;
+		}>;
+	};
+	agent: string;
+	model: {
+		providerID: string;
+		modelID: string;
+	};
+	system?: string;
+	tools?: Record<string, boolean>;
+}
+
+interface AssistantMessageInfo {
+	id: string;
+	sessionID: string;
+	role: "assistant";
+	time: {
+		created: number;
+		completed?: number;
+	};
+	error?: {
+		name: string;
+		data: Record<string, unknown>;
+	};
+	parentID: string;
+	modelID: string;
+	providerID: string;
+	mode: string;
+	path: {
+		cwd: string;
+		root: string;
+	};
+	summary?: boolean;
+	cost: number;
+	tokens: {
+		input: number;
+		output: number;
+		reasoning: number;
+		cache: {
+			read: number;
+			write: number;
+		};
+	};
+	finish?: string;
+}
+
+type MessageInfo = UserMessageInfo | AssistantMessageInfo;
+
+interface TextPart {
+	id: string;
+	sessionID: string;
+	messageID: string;
+	type: "text";
+	text: string;
+	synthetic?: boolean;
+	ignored?: boolean;
+	time?: {
+		start: number;
+		end?: number;
+	};
+	metadata?: Record<string, unknown>;
+}
+
+interface ReasoningPart {
+	id: string;
+	sessionID: string;
+	messageID: string;
+	type: "reasoning";
+	text: string;
+	metadata?: Record<string, unknown>;
+	time: {
+		start: number;
+		end?: number;
+	};
+}
+
+interface ToolStatePending {
+	status: "pending";
+	input: Record<string, unknown>;
+	raw: string;
+}
+
+interface ToolStateRunning {
+	status: "running";
+	input: Record<string, unknown>;
+	title?: string;
+	metadata?: Record<string, unknown>;
+	time: {
+		start: number;
+	};
+}
+
+interface ToolStateCompleted {
+	status: "completed";
+	input: Record<string, unknown>;
+	output: string;
+	title: string;
+	metadata: Record<string, unknown>;
+	time: {
+		start: number;
+		end: number;
+		compacted?: number;
+	};
+}
+
+interface ToolStateError {
+	status: "error";
+	input: Record<string, unknown>;
+	error: string;
+	metadata?: Record<string, unknown>;
+	time: {
+		start: number;
+		end: number;
+	};
+}
+
+type ToolState =
+	| ToolStatePending
+	| ToolStateRunning
+	| ToolStateCompleted
+	| ToolStateError;
+
+interface ToolPart {
+	id: string;
+	sessionID: string;
+	messageID: string;
+	type: "tool";
+	callID: string;
+	tool: string;
+	state: ToolState;
+	metadata?: Record<string, unknown>;
+}
+
+interface StepStartPart {
+	id: string;
+	sessionID: string;
+	messageID: string;
+	type: "step-start";
+	snapshot?: string;
+}
+
+interface StepFinishPart {
+	id: string;
+	sessionID: string;
+	messageID: string;
+	type: "step-finish";
+	reason: string;
+	snapshot?: string;
+	cost: number;
+	tokens: {
+		input: number;
+		output: number;
+		reasoning: number;
+		cache: {
+			read: number;
+			write: number;
+		};
+	};
+}
+
+interface FilePart {
+	id: string;
+	sessionID: string;
+	messageID: string;
+	type: "file";
+	mime: string;
+	filename?: string;
+	url: string;
+}
+
+type MessagePart =
+	| TextPart
+	| ReasoningPart
+	| ToolPart
+	| StepStartPart
+	| StepFinishPart
+	| FilePart;
+
+interface OpencodeMessage {
+	info: MessageInfo;
+	parts: MessagePart[];
 }
 
 interface Provider {
@@ -21,12 +214,369 @@ interface Provider {
 	models?: { id: string; name: string }[];
 }
 
+interface Agent {
+	name: string;
+	description?: string;
+	mode?: string;
+	builtIn?: boolean;
+}
+
+// Debug logger with styled output
+const DEBUG = process.env.NODE_ENV === "development";
+const log = {
+	info: (label: string, ...args: unknown[]) => {
+		if (DEBUG)
+			console.log(
+				`%c[Chat] %c${label}`,
+				"color: #10b981; font-weight: bold",
+				"color: #a1a1aa",
+				...args,
+			);
+	},
+	success: (label: string, ...args: unknown[]) => {
+		if (DEBUG)
+			console.log(
+				`%c[Chat] %c✓ ${label}`,
+				"color: #10b981; font-weight: bold",
+				"color: #22c55e",
+				...args,
+			);
+	},
+	warn: (label: string, ...args: unknown[]) => {
+		if (DEBUG)
+			console.warn(
+				`%c[Chat] %c⚠ ${label}`,
+				"color: #10b981; font-weight: bold",
+				"color: #eab308",
+				...args,
+			);
+	},
+	error: (label: string, ...args: unknown[]) => {
+		if (DEBUG)
+			console.error(
+				`%c[Chat] %c✗ ${label}`,
+				"color: #10b981; font-weight: bold",
+				"color: #ef4444",
+				...args,
+			);
+	},
+	debug: (label: string, data: unknown) => {
+		if (DEBUG) {
+			console.groupCollapsed(
+				`%c[Chat] %c${label}`,
+				"color: #10b981; font-weight: bold",
+				"color: #6366f1",
+			);
+			console.log(data);
+			console.groupEnd();
+		}
+	},
+};
+
+// Helper to extract text content from message parts
+function getTextContent(parts: MessagePart[]): string {
+	return parts
+		.filter((p): p is TextPart => p.type === "text")
+		.map((p) => p.text)
+		.join("")
+		.trim();
+}
+
+// Helper to get reasoning content from message parts
+function getReasoningContent(parts: MessagePart[]): string {
+	return parts
+		.filter((p): p is ReasoningPart => p.type === "reasoning")
+		.map((p) => p.text)
+		.join("")
+		.trim();
+}
+
+// Helper to get tool calls from message parts
+function getToolCalls(parts: MessagePart[]): ToolPart[] {
+	return parts.filter((p): p is ToolPart => p.type === "tool");
+}
+
+// Helper to get tool title based on state
+function getToolTitle(state: ToolState): string | undefined {
+	if (state.status === "completed" || state.status === "running") {
+		return state.title;
+	}
+	return undefined;
+}
+
+// Helper to get tool output
+function getToolOutput(state: ToolState): string | undefined {
+	if (state.status === "completed") {
+		return state.output;
+	}
+	if (state.status === "error") {
+		return state.error;
+	}
+	return undefined;
+}
+
+// Helper to get tool preview
+function getToolPreview(state: ToolState): string | undefined {
+	if (state.status === "completed" && state.metadata?.preview) {
+		return state.metadata.preview as string;
+	}
+	return undefined;
+}
+
+// Tool call component
+function ToolCallDisplay({ tool }: { tool: ToolPart }) {
+	const [isExpanded, setIsExpanded] = useState(false);
+	const title = getToolTitle(tool.state);
+	const output = getToolOutput(tool.state);
+	const preview = getToolPreview(tool.state);
+
+	return (
+		<div className="my-2 overflow-hidden rounded-lg border border-[#27272a] bg-[#18181b]">
+			<button
+				className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-[#27272a]/50"
+				onClick={() => setIsExpanded(!isExpanded)}
+				type="button"
+			>
+				<svg
+					aria-hidden="true"
+					className={`h-3 w-3 text-[#71717a] transition-transform ${isExpanded ? "rotate-90" : ""}`}
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						d="M9 5l7 7-7 7"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth={2}
+					/>
+				</svg>
+				<span className="font-mono text-amber-400">{tool.tool}</span>
+				<span className="text-[#52525b]">→</span>
+				<span className="flex-1 truncate text-[#a1a1aa]">
+					{title || JSON.stringify(tool.state.input).slice(0, 50)}
+				</span>
+				<span
+					className={`rounded px-1.5 py-0.5 font-medium text-[10px] ${
+						tool.state.status === "completed"
+							? "bg-emerald-500/20 text-emerald-400"
+							: tool.state.status === "error"
+								? "bg-red-500/20 text-red-400"
+								: tool.state.status === "running"
+									? "bg-blue-500/20 text-blue-400"
+									: "bg-yellow-500/20 text-yellow-400"
+					}`}
+				>
+					{tool.state.status}
+				</span>
+			</button>
+			{isExpanded && (
+				<div className="space-y-2 border-[#27272a] border-t p-3">
+					<div>
+						<span className="text-[#52525b] text-[10px] uppercase tracking-wider">
+							Input
+						</span>
+						<pre className="mt-1 overflow-x-auto rounded bg-[#0f0f14] p-2 text-[#a1a1aa] text-xs">
+							{JSON.stringify(tool.state.input, null, 2)}
+						</pre>
+					</div>
+					{output && (
+						<div>
+							<span className="text-[#52525b] text-[10px] uppercase tracking-wider">
+								{tool.state.status === "error" ? "Error" : "Output"}
+							</span>
+							<pre
+								className={`mt-1 max-h-64 overflow-x-auto overflow-y-auto rounded bg-[#0f0f14] p-2 text-xs ${
+									tool.state.status === "error"
+										? "text-red-400"
+										: "text-[#a1a1aa]"
+								}`}
+							>
+								{preview || output.slice(0, 1000)}
+								{output.length > 1000 && !preview && "..."}
+							</pre>
+						</div>
+					)}
+				</div>
+			)}
+		</div>
+	);
+}
+
+// Helper to check if message is from user
+function isUserMessage(info: MessageInfo): info is UserMessageInfo {
+	return info.role === "user";
+}
+
+// Helper to check if message is from assistant
+function isAssistantMessage(info: MessageInfo): info is AssistantMessageInfo {
+	return info.role === "assistant";
+}
+
+// Simple markdown-like rendering
+function renderMarkdown(text: string): React.ReactNode {
+	// Split by markdown patterns
+	const parts = text.split(/(\*\*[^*]+\*\*|\n- |\n\*\*[^*]+:\*\*)/g);
+
+	return parts.map((part, i) => {
+		// Use the content itself as part of the key for uniqueness
+		const key = `${i}-${part.slice(0, 10)}`;
+		if (part.startsWith("**") && part.endsWith("**")) {
+			return (
+				<strong className="text-[#e4e4e7]" key={key}>
+					{part.slice(2, -2)}
+				</strong>
+			);
+		}
+		if (part === "\n- ") {
+			return <span key={key}>{"\n• "}</span>;
+		}
+		return <span key={key}>{part}</span>;
+	});
+}
+
+// Message component
+function MessageDisplay({ message }: { message: OpencodeMessage }) {
+	const textContent = getTextContent(message.parts);
+	const reasoningContent = getReasoningContent(message.parts);
+	const toolCalls = getToolCalls(message.parts);
+	const isUser = isUserMessage(message.info);
+	const [showReasoning, setShowReasoning] = useState(false);
+
+	return (
+		<div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+			<div
+				className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+					isUser
+						? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white"
+						: "bg-[#1c1c22] text-[#e4e4e7]"
+				}`}
+			>
+				{/* Role & Model badge for assistant */}
+				{isAssistantMessage(message.info) && (
+					<div className="mb-2 flex flex-wrap items-center gap-2 border-[#27272a] border-b pb-2">
+						<span className="font-medium text-[10px] text-emerald-400 uppercase tracking-wider">
+							{message.info.mode || "assistant"}
+						</span>
+						<span className="text-[#27272a]">•</span>
+						<span className="font-mono text-[#52525b] text-[10px]">
+							{message.info.providerID}/{message.info.modelID}
+						</span>
+						{message.info.tokens && (
+							<>
+								<span className="text-[#27272a]">•</span>
+								<span className="text-[#52525b] text-[10px]">
+									{message.info.tokens.input + message.info.tokens.output}{" "}
+									tokens
+								</span>
+							</>
+						)}
+						{message.info.finish && (
+							<span
+								className={`rounded px-1.5 py-0.5 font-medium text-[10px] ${
+									message.info.finish === "stop"
+										? "bg-emerald-500/20 text-emerald-400"
+										: message.info.finish === "tool-calls"
+											? "bg-amber-500/20 text-amber-400"
+											: "bg-[#27272a] text-[#71717a]"
+								}`}
+							>
+								{message.info.finish}
+							</span>
+						)}
+					</div>
+				)}
+
+				{/* User message agent/model info */}
+				{isUserMessage(message.info) && (
+					<div className="mb-2 flex items-center gap-2 border-white/20 border-b pb-2 text-white/70">
+						<span className="text-[10px] uppercase tracking-wider">
+							→ {message.info.agent}
+						</span>
+					</div>
+				)}
+
+				{/* Reasoning section (collapsible) */}
+				{!isUser && reasoningContent && (
+					<div className="mb-3">
+						<button
+							className="flex items-center gap-1 text-[10px] text-purple-400 transition-colors hover:text-purple-300"
+							onClick={() => setShowReasoning(!showReasoning)}
+							type="button"
+						>
+							<svg
+								aria-hidden="true"
+								className={`h-3 w-3 transition-transform ${showReasoning ? "rotate-90" : ""}`}
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									d="M9 5l7 7-7 7"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+								/>
+							</svg>
+							Reasoning
+						</button>
+						{showReasoning && (
+							<div className="mt-2 rounded border border-purple-500/20 bg-purple-500/10 p-2 text-purple-200 text-xs italic">
+								{reasoningContent}
+							</div>
+						)}
+					</div>
+				)}
+
+				{/* Tool calls (for assistant messages) */}
+				{!isUser && toolCalls.length > 0 && (
+					<div className="mb-3">
+						{toolCalls.map((tool) => (
+							<ToolCallDisplay key={tool.id} tool={tool} />
+						))}
+					</div>
+				)}
+
+				{/* Text content */}
+				{textContent && (
+					<div className="whitespace-pre-wrap text-sm leading-relaxed">
+						{renderMarkdown(textContent)}
+					</div>
+				)}
+
+				{/* Error display */}
+				{isAssistantMessage(message.info) && message.info.error && (
+					<div className="mt-3 rounded border border-red-500/20 bg-red-500/10 p-2">
+						<span className="font-medium text-red-400 text-xs">
+							{message.info.error.name}
+						</span>
+						{message.info.error.data?.message && (
+							<p className="mt-1 text-red-300 text-xs">
+								{String(message.info.error.data.message)}
+							</p>
+						)}
+					</div>
+				)}
+
+				{/* Timestamp */}
+				{message.info.time.created && (
+					<span
+						className={`mt-2 block text-xs ${isUser ? "text-white/60" : "text-[#52525b]"}`}
+					>
+						{new Date(message.info.time.created).toLocaleString()}
+					</span>
+				)}
+			</div>
+		</div>
+	);
+}
+
 export default function AdminChatsPage() {
 	const [sessions, setSessions] = useState<Session[]>([]);
 	const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
 		null,
 	);
-	const [messages, setMessages] = useState<Message[]>([]);
+	const [messages, setMessages] = useState<OpencodeMessage[]>([]);
 	const [newMessage, setNewMessage] = useState("");
 	const [isLoading, setIsLoading] = useState(false);
 	const [isSending, setIsSending] = useState(false);
@@ -40,39 +590,100 @@ export default function AdminChatsPage() {
 	const [selectedModel, setSelectedModel] = useState<string>(
 		"claude-sonnet-4-20250514",
 	);
+	const [agents, setAgents] = useState<Agent[]>([]);
+	const [selectedAgent, setSelectedAgent] = useState<string>("docs-agent");
 
 	// Check health and configure auth on mount
 	useEffect(() => {
 		async function initialize() {
+			log.info("Initializing...");
+
 			// Check health
 			try {
+				log.info("Checking health at /api/opencode/health");
 				const healthRes = await fetch("/api/opencode/health");
-				const healthData = await healthRes.json();
-				setHealthStatus(
-					healthData.status === "healthy" ? "healthy" : "unhealthy",
-				);
 
-				if (healthData.status === "healthy") {
+				if (!healthRes.ok) {
+					log.warn(`Health check failed: ${healthRes.status}`);
+					setHealthStatus("unhealthy");
+					return;
+				}
+
+				const healthData = await healthRes.json();
+				log.debug("Health response", healthData);
+
+				const isHealthy = healthData.status === "healthy";
+				setHealthStatus(isHealthy ? "healthy" : "unhealthy");
+
+				if (isHealthy) {
+					log.success("Server healthy");
+
 					// Auto-configure auth from env vars
+					log.info("Fetching auth config...");
 					const authRes = await fetch("/api/opencode/auth");
-					const authData = await authRes.json();
-					if (authData.configured) {
-						setAuthStatus(`Authenticated: ${authData.providerId}`);
-						setSelectedProvider(authData.providerId);
-					} else if (authData.error) {
-						setAuthStatus(`Auth error: ${authData.error}`);
+					if (authRes.ok) {
+						const authData = await authRes.json();
+						log.debug("Auth response", authData);
+
+						if (authData.configured) {
+							log.success(
+								`Authenticated with provider: ${authData.providerId}`,
+							);
+							setAuthStatus(`Authenticated: ${authData.providerId}`);
+							setSelectedProvider(authData.providerId);
+						} else if (authData.error) {
+							log.warn(`Auth error: ${authData.error}`);
+							setAuthStatus(`Auth error: ${authData.error}`);
+						} else {
+							log.info("No auth configured");
+						}
+					} else {
+						log.warn(`Auth fetch failed: ${authRes.status}`);
 					}
 
 					// Fetch providers
+					log.info("Fetching providers...");
 					const providersRes = await fetch("/api/opencode/providers");
 					if (providersRes.ok) {
 						const providersData = await providersRes.json();
+						log.debug("Providers response", providersData);
 						if (Array.isArray(providersData)) {
+							log.success(`Loaded ${providersData.length} providers`);
 							setProviders(providersData);
 						}
+					} else {
+						log.warn(`Providers fetch failed: ${providersRes.status}`);
 					}
+
+					// Fetch agents
+					log.info("Fetching agents...");
+					const agentsRes = await fetch("/api/opencode/agents");
+					if (agentsRes.ok) {
+						const agentsData = await agentsRes.json();
+						log.debug("Agents response", agentsData);
+						if (Array.isArray(agentsData)) {
+							log.success(`Loaded ${agentsData.length} agents`);
+							setAgents(agentsData);
+							// Ensure docs-agent is selected if it exists, otherwise use first agent
+							const docsAgent = agentsData.find(
+								(a: Agent) => a.name === "docs-agent",
+							);
+							if (docsAgent) {
+								setSelectedAgent("docs-agent");
+							} else if (agentsData.length > 0) {
+								setSelectedAgent(agentsData[0].name);
+							}
+						}
+					} else {
+						log.warn(`Agents fetch failed: ${agentsRes.status}`);
+					}
+				} else {
+					log.warn(
+						`Server unhealthy: ${healthData.message || healthData.status}`,
+					);
 				}
-			} catch {
+			} catch (err) {
+				log.error("Initialization failed", err);
 				setHealthStatus("unhealthy");
 			}
 		}
@@ -81,6 +692,7 @@ export default function AdminChatsPage() {
 
 	// Fetch sessions
 	const fetchSessions = useCallback(async () => {
+		log.info("Fetching sessions...");
 		setIsLoading(true);
 		setError(null);
 		try {
@@ -89,10 +701,15 @@ export default function AdminChatsPage() {
 				throw new Error(`Failed to fetch sessions: ${res.status}`);
 			}
 			const data = await res.json();
+			log.debug("Sessions response", data);
 			const sessionList = Array.isArray(data) ? data : data.sessions || [];
+			log.success(`Loaded ${sessionList.length} sessions`);
 			setSessions(sessionList);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to fetch sessions");
+			const message =
+				err instanceof Error ? err.message : "Failed to fetch sessions";
+			log.error("Fetch sessions failed", err);
+			setError(message);
 		} finally {
 			setIsLoading(false);
 		}
@@ -106,6 +723,7 @@ export default function AdminChatsPage() {
 
 	// Fetch messages for selected session
 	const fetchMessages = useCallback(async (sessionId: string) => {
+		log.info(`Fetching messages for session ${sessionId.slice(0, 8)}...`);
 		setIsLoading(true);
 		setError(null);
 		try {
@@ -114,10 +732,18 @@ export default function AdminChatsPage() {
 				throw new Error(`Failed to fetch messages: ${res.status}`);
 			}
 			const data = await res.json();
-			const messageList = Array.isArray(data) ? data : data.messages || [];
+			log.debug("Messages response", data);
+			// Handle Opencode API response format
+			const messageList: OpencodeMessage[] = Array.isArray(data)
+				? data
+				: data.messages || [];
+			log.success(`Loaded ${messageList.length} messages`);
 			setMessages(messageList);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to fetch messages");
+			const message =
+				err instanceof Error ? err.message : "Failed to fetch messages";
+			log.error("Fetch messages failed", err);
+			setError(message);
 		} finally {
 			setIsLoading(false);
 		}
@@ -125,30 +751,37 @@ export default function AdminChatsPage() {
 
 	useEffect(() => {
 		if (selectedSessionId) {
+			log.info(`Selected session: ${selectedSessionId.slice(0, 8)}`);
 			fetchMessages(selectedSessionId);
 		}
 	}, [selectedSessionId, fetchMessages]);
 
 	// Create new session
 	const createSession = async () => {
+		log.info("Creating new session...");
 		setIsLoading(true);
 		setError(null);
 		try {
+			const title = `Session ${new Date().toLocaleString()}`;
+			log.debug("Session payload", { title });
 			const res = await fetch("/api/opencode/sessions", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					title: `Session ${new Date().toLocaleString()}`,
-				}),
+				body: JSON.stringify({ title }),
 			});
 			if (!res.ok) {
 				throw new Error(`Failed to create session: ${res.status}`);
 			}
 			const newSession = await res.json();
+			log.success(`Created session: ${newSession.id}`);
+			log.debug("New session", newSession);
 			await fetchSessions();
 			setSelectedSessionId(newSession.id);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to create session");
+			const message =
+				err instanceof Error ? err.message : "Failed to create session";
+			log.error("Create session failed", err);
+			setError(message);
 		} finally {
 			setIsLoading(false);
 		}
@@ -156,7 +789,31 @@ export default function AdminChatsPage() {
 
 	// Send message
 	const sendMessage = async () => {
-		if (!selectedSessionId || !newMessage.trim()) return;
+		if (!selectedSessionId || !newMessage.trim() || !selectedAgent) return;
+
+		const messageText = newMessage.trim();
+		log.info(`Sending message to session ${selectedSessionId.slice(0, 8)}...`);
+
+		// Construct PromptInput payload according to Opencode API spec
+		const payload = {
+			agent: selectedAgent,
+			model: {
+				providerID: selectedProvider,
+				modelID: selectedModel,
+			},
+			parts: [
+				{
+					type: "text",
+					text: messageText,
+				},
+			],
+		};
+
+		log.debug("Message payload", {
+			agent: payload.agent,
+			model: payload.model,
+			text: messageText.slice(0, 100) + (messageText.length > 100 ? "..." : ""),
+		});
 
 		setIsSending(true);
 		setError(null);
@@ -166,20 +823,24 @@ export default function AdminChatsPage() {
 				{
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						text: newMessage,
-						providerID: selectedProvider,
-						modelID: selectedModel,
-					}),
+					body: JSON.stringify(payload),
 				},
 			);
 			if (!res.ok) {
+				const errorBody = await res.text();
+				log.error(`Send failed with status ${res.status}`, errorBody);
 				throw new Error(`Failed to send message: ${res.status}`);
 			}
+			const responseData = await res.json();
+			log.success("Message sent");
+			log.debug("Send response", responseData);
 			setNewMessage("");
 			await fetchMessages(selectedSessionId);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to send message");
+			const message =
+				err instanceof Error ? err.message : "Failed to send message";
+			log.error("Send message failed", err);
+			setError(message);
 		} finally {
 			setIsSending(false);
 		}
@@ -399,32 +1060,11 @@ export default function AdminChatsPage() {
 									</div>
 								) : (
 									<div className="space-y-4">
-										{messages.map((message) => (
-											<div
-												className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-												key={message.id}
-											>
-												<div
-													className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-														message.role === "user"
-															? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white"
-															: message.role === "assistant"
-																? "bg-[#1c1c22] text-[#e4e4e7]"
-																: "bg-[#27272a] text-[#a1a1aa] italic"
-													}`}
-												>
-													<p className="whitespace-pre-wrap text-sm leading-relaxed">
-														{message.content}
-													</p>
-													{message.createdAt && (
-														<span
-															className={`mt-2 block text-xs ${message.role === "user" ? "text-white/60" : "text-[#52525b]"}`}
-														>
-															{formatTimestamp(message.createdAt)}
-														</span>
-													)}
-												</div>
-											</div>
+										{messages.map((message, index) => (
+											<MessageDisplay
+												key={message.info.id || `msg-${index}`}
+												message={message}
+											/>
 										))}
 									</div>
 								)}
@@ -432,8 +1072,25 @@ export default function AdminChatsPage() {
 
 							{/* Message Input */}
 							<div className="border-[#27272a] border-t bg-[#0f0f14]/80 p-4">
-								{/* Provider/Model Selection */}
+								{/* Agent/Provider/Model Selection */}
 								<div className="mb-3 flex gap-3">
+									<select
+										className="rounded-lg border border-[#27272a] bg-[#1c1c22] px-3 py-2 text-[#e4e4e7] text-sm outline-none focus:border-emerald-500/50"
+										disabled={agents.length === 0}
+										onChange={(e) => setSelectedAgent(e.target.value)}
+										value={agents.length === 0 ? "" : selectedAgent}
+									>
+										{agents.length === 0 ? (
+											<option value="">Loading agents...</option>
+										) : (
+											agents.map((agent) => (
+												<option key={agent.name} value={agent.name}>
+													{agent.name}
+													{agent.description ? ` - ${agent.description}` : ""}
+												</option>
+											))
+										)}
+									</select>
 									<select
 										className="rounded-lg border border-[#27272a] bg-[#1c1c22] px-3 py-2 text-[#e4e4e7] text-sm outline-none focus:border-emerald-500/50"
 										onChange={(e) => setSelectedProvider(e.target.value)}
@@ -472,7 +1129,7 @@ export default function AdminChatsPage() {
 									/>
 									<button
 										className="flex items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-3 text-white transition-all hover:from-emerald-600 hover:to-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
-										disabled={!newMessage.trim() || isSending}
+										disabled={!newMessage.trim() || isSending || !selectedAgent}
 										onClick={sendMessage}
 										type="button"
 									>
