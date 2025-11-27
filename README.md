@@ -1,162 +1,65 @@
 # Sprintagen
 
-A [T3 Stack](https://create.t3.gg/) project with integrated Opencode AI assistant.
+> **⚠️ Proof of Concept**: Not production-ready. For demonstration only.
 
-## Tech Stack
+AI-powered ticket management that intelligently analyzes, ranks, and manages tickets from Jira, Linear, Docker, and manual sources.
 
-- [Next.js](https://nextjs.org) - React framework
-- [Better Auth](https://www.better-auth.com/) - Authentication
-- [Drizzle](https://orm.drizzle.team) - Database ORM
-- [Tailwind CSS](https://tailwindcss.com) - Styling
-- [tRPC](https://trpc.io) - End-to-end typesafe APIs
-- [Opencode](https://opencode.ai) - AI coding assistant
+## Features
 
-## Getting Started
+- **Multi-provider support**: Jira, Linear, Docker, manual tickets
+- **AI ranking**: Automatic prioritization by urgency, impact, complexity
+- **Smart recommendations**: AI-generated steps and assignments
+- **Integrated chat**: Contextual AI assistance per ticket
+- **Code analysis**: Opencode integration for codebase understanding
+
+## Quick Start
 
 ### Prerequisites
 
 - [Bun](https://bun.sh/) (recommended) or Node.js 20+
-- [Docker](https://www.docker.com/) and Docker Compose (for containerized development)
+- [Docker](https://www.docker.com/) (optional, for containerized setup)
+- Git
 
-### Local Development (without Docker)
-
-1. Install dependencies:
-   ```bash
-   bun install
-   ```
-
-2. Copy the environment file and configure it:
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Run database migrations:
-   ```bash
-   bun run db:push
-   ```
-
-4. Start the development server:
-   ```bash
-   bun run dev
-   ```
-
-The app will be available at [http://localhost:3000](http://localhost:3000).
-
-### Docker Development
-
-The project includes Docker support for running both the Next.js app and the Opencode server.
-
-#### Quick Start
-
-1. Copy the environment file:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Configure your `.env` file with the required values (GitHub OAuth, etc.)
-
-3. Start all services:
-   ```bash
-   docker compose up
-   ```
-
-This will start:
-- **web**: Next.js app at [http://localhost:3000](http://localhost:3000)
-- **opencode**: Opencode server at [http://localhost:4096](http://localhost:4096)
-
-#### Mounting a Repository for Opencode
-
-Opencode needs a repository to work with. You have two options:
-
-**Option 1: Clone a public repository (via environment variable)**
+### Local Development
 
 ```bash
-# In docker-compose.yml, uncomment and set:
-GIT_REPO_URL=https://github.com/your-org/your-repo.git
+# 1. Install dependencies
+bun install
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your keys (see Environment Variables below)
+
+# 3. Setup database
+bun run db:push    # Create tables
+bun run db:seed    # Optional: add sample data
+
+# 4. Start dev server
+bun run dev        # App runs at http://localhost:3000
 ```
 
-**Option 2: Mount a local repository (read-only)**
-
-For private repos or local development, mount your repository as a read-only volume:
-
-```yaml
-# In docker-compose.yml, under opencode.volumes:
-volumes:
-  - ./my-local-repo:/workspace/repo:ro
-```
-
-The `:ro` flag ensures Opencode can read the code but cannot modify it.
-
-#### Configuring AI Provider Auth
-
-Opencode needs API credentials to communicate with AI providers. Configure these in your `.env`:
+### Docker Setup
 
 ```bash
-# Provider ID (e.g., "anthropic", "openai", "openrouter")
-OPENCODE_PROVIDER_ID="anthropic"
-
-# Your API key for the provider
-OPENCODE_PROVIDER_API_KEY="sk-ant-..."
+# Configure .env then:
+docker compose up    # Starts web (3000) + opencode (4096)
 ```
 
-The Opencode container will automatically configure auth on startup via the `/auth/:id` endpoint.
+Opencode needs a codebase to analyze. Mount a local repo or set `GIT_REPO_URL` in `docker-compose.yml`.
 
-You can also refresh auth at runtime by calling:
-```bash
-curl -X POST http://localhost:3000/api/opencode/auth \
-  -H "Content-Type: application/json" \
-  -d '{"providerId": "anthropic", "apiKey": "sk-ant-..."}'
-```
-
-#### Using the Chat Interface
-
-Once the services are running, navigate to [http://localhost:3000/admin/chats](http://localhost:3000/admin/chats) to access the Opencode chat interface. From there you can:
-
-- Create new chat sessions
-- Send messages to the AI assistant
-- View conversation history
-
-#### Docker Services Overview
-
-| Service | Port | Description |
-|---------|------|-------------|
-| web | 3000 | Next.js application |
-| opencode | 4096 | Opencode AI server |
-
-#### Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `DATABASE_URL` | SQLite database path | Yes |
-| `BETTER_AUTH_SECRET` | Auth secret (production) | Prod only |
-| `BETTER_AUTH_GITHUB_CLIENT_ID` | GitHub OAuth client ID | Yes |
-| `BETTER_AUTH_GITHUB_CLIENT_SECRET` | GitHub OAuth secret | Yes |
-| `OPENCODE_SERVER_URL` | URL of Opencode server | Auto in Docker |
-| `OPENCODE_PROVIDER_ID` | AI provider identifier | Optional |
-| `OPENCODE_PROVIDER_API_KEY` | AI provider API key | Optional |
-
-## Project Structure
+## Architecture
 
 ```
 src/
-├── app/                    # Next.js App Router
-│   ├── admin/chats/       # Opencode chat interface
-│   ├── api/               # API routes
-│   │   ├── auth/          # Better Auth routes
-│   │   ├── opencode/      # Opencode proxy routes
-│   │   └── trpc/          # tRPC handler
-│   └── _components/       # Page components
-├── server/                # Server-side code
-│   ├── api/              # tRPC routers
-│   └── better-auth/      # Auth configuration
-├── db/                   # Database schema
-├── trpc/                 # tRPC setup
-└── styles/               # Global styles
+├── app/              # Next.js pages & API routes
+│   ├── admin/chats/  # Opencode chat UI
+│   ├── api/          # tRPC & Opencode proxy
+│   └── _components/  # Page components
+├── components/ui/    # Reusable UI (Radix)
+├── server/           # Backend logic
+│   ├── ai/           # AI providers (Cerebras, OpenRouter)
+│   ├── api/          # tRPC routers
+│   ├── db/           # Drizzle schema & client
+│   └── tickets/      # Provider integrations
+└── lib/              # Utilities
 ```
-
-## Learn More
-
-- [T3 Stack Documentation](https://create.t3.gg/)
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Opencode Documentation](https://opencode.ai/docs/)
-- [Better Auth Documentation](https://www.better-auth.com/docs)
