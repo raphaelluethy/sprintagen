@@ -254,188 +254,214 @@ async function main() {
 		// ========================================================================
 		console.log("🎫 Inserting tickets...");
 
+		// ========================================================================
+		// OpenCode GitHub Issues - Real showcase tickets from sst/opencode
+		// https://github.com/sst/opencode/issues?q=sort%3Aupdated-desc+is%3Aissue+is%3Aopen
+		// ========================================================================
 		const seedTickets = [
 			{
 				id: crypto.randomUUID(),
-				externalId: "JIRA-123",
-				provider: "jira" as TicketProvider,
-				title: "Fix authentication bug in login flow",
-				description:
-					"Users are experiencing issues when logging in with OAuth providers. The callback handler is not properly validating tokens.",
-				status: "in_progress" as TicketStatus,
-				priority: "high" as TicketPriority,
-				assignee: "alice@example.com",
-				labels: ["bug", "auth", "critical"],
-				metadata: {
-					jiraIssueType: "Bug",
-					jiraProject: "PROJ",
-					jiraReporter: "bob@example.com",
-				},
-				aiScore: 8.5,
-				createdAt: daysAgo(5),
-				lastSyncedAt: secondsAgo(60 * 60),
-			},
-			{
-				id: crypto.randomUUID(),
-				externalId: "LIN-456",
-				provider: "linear" as TicketProvider,
-				title: "Implement dark mode toggle",
-				description:
-					"Add a theme switcher component that allows users to toggle between light and dark modes. Should persist preference in localStorage.",
-				status: "open" as TicketStatus,
-				priority: "medium" as TicketPriority,
-				assignee: null,
-				labels: ["feature", "ui", "enhancement"],
-				metadata: {
-					linearTeam: "Frontend",
-					linearEstimate: 3,
-				},
-				aiScore: 6.2,
-				createdAt: daysAgo(3),
-				lastSyncedAt: secondsAgo(60 * 120),
-			},
-			{
-				id: crypto.randomUUID(),
-				externalId: null,
+				externalId: "4804",
 				provider: "manual" as TicketProvider,
-				title: "Update documentation for API endpoints",
+				title: "High CPU usage",
 				description:
-					"Documentation is outdated. Need to update OpenAPI specs and add examples for all endpoints.",
-				status: "review" as TicketStatus,
-				priority: "low" as TicketPriority,
-				assignee: "bob@example.com",
-				labels: ["documentation", "api"],
-				metadata: {},
-				aiScore: 4.1,
-				createdAt: daysAgo(7),
-				lastSyncedAt: null,
-			},
-			{
-				id: crypto.randomUUID(),
-				externalId: "DOCKER-789",
-				provider: "docker" as TicketProvider,
-				title: "Optimize Docker image build time",
-				description:
-					"Current build takes 15 minutes. Investigate layer caching and multi-stage builds to reduce time.",
-				status: "done" as TicketStatus,
-				priority: "medium" as TicketPriority,
-				assignee: "alice@example.com",
-				labels: ["devops", "docker", "performance"],
-				metadata: {
-					dockerImage: "app:latest",
-					dockerRegistry: "registry.example.com",
-				},
-				aiScore: 7.3,
-				createdAt: daysAgo(10),
-				lastSyncedAt: daysAgo(1),
-			},
-			{
-				id: crypto.randomUUID(),
-				externalId: "JIRA-124",
-				provider: "jira" as TicketProvider,
-				title: "Add unit tests for payment processing",
-				description:
-					"Critical payment flow lacks test coverage. Need comprehensive unit tests for all payment scenarios.",
+					"OpenCode exhibits high CPU usage during idle periods. The opentui TUI framework appears to be continuously polling or rendering even when no user input is occurring. This affects battery life on laptops and overall system performance.",
 				status: "open" as TicketStatus,
 				priority: "urgent" as TicketPriority,
-				assignee: null,
-				labels: ["testing", "payment", "critical"],
+				assignee: "alice@example.com",
+				labels: ["bug", "perf", "opentui", "opencode"],
 				metadata: {
-					jiraIssueType: "Task",
-					jiraProject: "PROJ",
+					githubRepo: "sst/opencode",
+					githubIssueNumber: 4804,
+					githubIssueUrl: "https://github.com/sst/opencode/issues/4804",
 				},
-				aiScore: 9.1,
-				createdAt: daysAgo(2),
+				aiScore: 9.2,
+				createdAt: daysAgo(1),
 				lastSyncedAt: secondsAgo(60 * 30),
 			},
 			{
 				id: crypto.randomUUID(),
-				externalId: "LIN-457",
-				provider: "linear" as TicketProvider,
-				title: "Refactor user service to use dependency injection",
+				externalId: "3013",
+				provider: "manual" as TicketProvider,
+				title: "Uses a huge amount of memory",
 				description:
-					"Current implementation has tight coupling. Refactor to use DI pattern for better testability.",
+					"OpenCode memory usage grows significantly over time, especially during long coding sessions. Memory can reach several gigabytes after extended use, forcing users to restart the application. Likely related to message history accumulation or LSP caching.",
 				status: "in_progress" as TicketStatus,
-				priority: "medium" as TicketPriority,
+				priority: "high" as TicketPriority,
 				assignee: "alice@example.com",
-				labels: ["refactor", "architecture"],
+				labels: ["bad", "bug", "perf", "opencode"],
 				metadata: {
-					linearTeam: "Backend",
-					linearEstimate: 5,
+					githubRepo: "sst/opencode",
+					githubIssueNumber: 3013,
+					githubIssueUrl: "https://github.com/sst/opencode/issues/3013",
 				},
-				aiScore: 5.8,
-				createdAt: daysAgo(4),
+				aiScore: 8.7,
+				createdAt: daysAgo(51),
+				lastSyncedAt: daysAgo(1),
+			},
+			{
+				id: crypto.randomUUID(),
+				externalId: "4774",
+				provider: "docker" as TicketProvider,
+				title:
+					"Docker container fails to start due to bun dependency install issue",
+				description:
+					"The OpenCode Docker container fails to start because bun dependency installation fails during container startup. The entrypoint script attempts to install dependencies but encounters permission or network issues in certain environments.",
+				status: "open" as TicketStatus,
+				priority: "high" as TicketPriority,
+				assignee: null,
+				labels: ["bug", "docker", "opencode"],
+				metadata: {
+					githubRepo: "sst/opencode",
+					githubIssueNumber: 4774,
+					githubIssueUrl: "https://github.com/sst/opencode/issues/4774",
+					dockerImage: "opencode:latest",
+				},
+				aiScore: 7.8,
+				createdAt: daysAgo(2),
+				lastSyncedAt: secondsAgo(60 * 120),
+			},
+			{
+				id: crypto.randomUUID(),
+				externalId: "4808",
+				provider: "manual" as TicketProvider,
+				title: "Alt+d can no longer be remapped",
+				description:
+					"After the v1.0 opentui migration, the Alt+d keybinding can no longer be remapped in the opencode.json configuration. This affects users who want to customize their keyboard shortcuts, particularly those using terminal multiplexers like tmux.",
+				status: "open" as TicketStatus,
+				priority: "medium" as TicketPriority,
+				assignee: null,
+				labels: ["bug", "opentui", "opencode"],
+				metadata: {
+					githubRepo: "sst/opencode",
+					githubIssueNumber: 4808,
+					githubIssueUrl: "https://github.com/sst/opencode/issues/4808",
+				},
+				aiScore: 5.4,
+				createdAt: daysAgo(1),
+				lastSyncedAt: secondsAgo(60 * 60),
+			},
+			{
+				id: crypto.randomUUID(),
+				externalId: "4792",
+				provider: "manual" as TicketProvider,
+				title: "Anthropic provider in AI-SDK overwrites anthropic-beta headers",
+				description:
+					"When using the Anthropic provider through the AI-SDK, custom anthropic-beta headers are being overwritten. This prevents users from enabling beta features like extended thinking or prompt caching when using Claude models.",
+				status: "review" as TicketStatus,
+				priority: "medium" as TicketPriority,
+				assignee: "bob@example.com",
+				labels: ["bug", "opentui", "opencode", "providers"],
+				metadata: {
+					githubRepo: "sst/opencode",
+					githubIssueNumber: 4792,
+					githubIssueUrl: "https://github.com/sst/opencode/issues/4792",
+				},
+				aiScore: 6.5,
+				createdAt: daysAgo(2),
 				lastSyncedAt: secondsAgo(60 * 90),
 			},
 			{
 				id: crypto.randomUUID(),
-				externalId: null,
+				externalId: "3734",
 				provider: "manual" as TicketProvider,
-				title: "Set up CI/CD pipeline for staging environment",
+				title: "CJK characters break some features like @ mentions",
 				description:
-					"Configure GitHub Actions to automatically deploy to staging on merge to develop branch.",
-				status: "done" as TicketStatus,
-				priority: "high" as TicketPriority,
-				assignee: "bob@example.com",
-				labels: ["ci/cd", "devops"],
-				metadata: {},
-				aiScore: 7.9,
-				createdAt: daysAgo(12),
-				lastSyncedAt: null,
-			},
-			{
-				id: crypto.randomUUID(),
-				externalId: "LIN-458",
-				provider: "linear" as TicketProvider,
-				title: "Fix memory leak in data processing module",
-				description:
-					"Memory usage grows over time when processing large datasets. Need to identify and fix the leak.",
-				status: "closed" as TicketStatus,
-				priority: "high" as TicketPriority,
-				assignee: "alice@example.com",
-				labels: ["bug", "performance", "memory"],
+					"When typing CJK (Chinese, Japanese, Korean) characters, the @ mention feature breaks. The input method editor (IME) composition interferes with the mention detection logic, causing incorrect behavior or crashes for international users.",
+				status: "open" as TicketStatus,
+				priority: "medium" as TicketPriority,
+				assignee: null,
+				labels: ["bug", "opentui", "opencode", "i18n"],
 				metadata: {
-					linearTeam: "Backend",
-					linearEstimate: 8,
+					githubRepo: "sst/opencode",
+					githubIssueNumber: 3734,
+					githubIssueUrl: "https://github.com/sst/opencode/issues/3734",
 				},
-				aiScore: 8.7,
-				createdAt: daysAgo(20),
-				lastSyncedAt: daysAgo(2),
+				aiScore: 6.1,
+				createdAt: daysAgo(26),
+				lastSyncedAt: daysAgo(1),
 			},
 			{
 				id: crypto.randomUUID(),
-				externalId: null,
+				externalId: "4801",
 				provider: "manual" as TicketProvider,
-				title: "Create onboarding guide for new developers",
+				title:
+					"[FEATURE]: Print some info when exiting: title, command to resume, usage stats",
 				description:
-					"Document the setup process, coding standards, and common workflows for new team members.",
+					"Feature request to display useful information when exiting OpenCode, such as: the session title, a command to resume the session, and usage statistics (tokens used, cost, duration). This would improve the developer experience for users who frequently switch between sessions.",
 				status: "open" as TicketStatus,
 				priority: "low" as TicketPriority,
 				assignee: null,
-				labels: ["documentation", "onboarding"],
-				metadata: {},
-				aiScore: 3.5,
-				createdAt: daysAgo(1),
+				labels: ["discussion", "feature", "opencode", "ux"],
+				metadata: {
+					githubRepo: "sst/opencode",
+					githubIssueNumber: 4801,
+					githubIssueUrl: "https://github.com/sst/opencode/issues/4801",
+				},
+				aiScore: 4.2,
+				createdAt: daysAgo(2),
 				lastSyncedAt: null,
 			},
 			{
 				id: crypto.randomUUID(),
-				externalId: "JIRA-125",
-				provider: "jira" as TicketProvider,
-				title: "Implement rate limiting for API endpoints",
+				externalId: "2464",
+				provider: "manual" as TicketProvider,
+				title:
+					"AT_APICallError: prompt token count of 130389 exceeds the limit of 128000",
 				description:
-					"Add rate limiting middleware to prevent abuse. Use Redis for distributed rate limiting.",
-				status: "review" as TicketStatus,
+					"Users encounter AT_APICallError when the accumulated context exceeds model token limits. This commonly happens in long sessions or when working with large codebases. The error message is not user-friendly and there's no automatic context compaction.",
+				status: "in_progress" as TicketStatus,
+				priority: "high" as TicketPriority,
+				assignee: "alice@example.com",
+				labels: ["bug", "opencode", "context", "tokens"],
+				metadata: {
+					githubRepo: "sst/opencode",
+					githubIssueNumber: 2464,
+					githubIssueUrl: "https://github.com/sst/opencode/issues/2464",
+				},
+				aiScore: 8.1,
+				createdAt: daysAgo(83),
+				lastSyncedAt: daysAgo(1),
+			},
+			{
+				id: crypto.randomUUID(),
+				externalId: "4754",
+				provider: "manual" as TicketProvider,
+				title: "Copy and Paste behaviour under Linux",
+				description:
+					"Copy and paste functionality does not work correctly under Linux. The clipboard integration with X11/Wayland is inconsistent, and users report that copied text from OpenCode doesn't appear in their system clipboard or vice versa.",
+				status: "open" as TicketStatus,
 				priority: "medium" as TicketPriority,
 				assignee: "bob@example.com",
-				labels: ["security", "api", "infrastructure"],
+				labels: ["bug", "opentui", "opencode", "linux"],
 				metadata: {
-					jiraIssueType: "Story",
-					jiraProject: "PROJ",
+					githubRepo: "sst/opencode",
+					githubIssueNumber: 4754,
+					githubIssueUrl: "https://github.com/sst/opencode/issues/4754",
 				},
-				aiScore: 6.9,
-				createdAt: daysAgo(6),
+				aiScore: 5.9,
+				createdAt: daysAgo(3),
 				lastSyncedAt: secondsAgo(60 * 180),
+			},
+			{
+				id: crypto.randomUUID(),
+				externalId: "1975",
+				provider: "manual" as TicketProvider,
+				title: "ctrl + arrow key no longer moves word-to-word",
+				description:
+					"The standard Ctrl+Arrow keyboard navigation for moving the cursor word-by-word no longer works after recent updates. This is a common text editing shortcut that users expect to work in any text input field.",
+				status: "done" as TicketStatus,
+				priority: "medium" as TicketPriority,
+				assignee: "alice@example.com",
+				labels: ["bug", "opencode", "keyboard"],
+				metadata: {
+					githubRepo: "sst/opencode",
+					githubIssueNumber: 1975,
+					githubIssueUrl: "https://github.com/sst/opencode/issues/1975",
+				},
+				aiScore: 5.2,
+				createdAt: daysAgo(104),
+				lastSyncedAt: daysAgo(1),
 			},
 		];
 
@@ -447,76 +473,106 @@ async function main() {
 		// ========================================================================
 		console.log("💬 Inserting ticket messages...");
 
-		const ticket1 = seedTickets[0]; // High priority auth bug
-		const ticket2 = seedTickets[1]; // Dark mode feature
-		const ticket4 = seedTickets[3]; // Docker optimization
+		const ticketCpu = seedTickets[0]; // High CPU usage (#4804)
+		const ticketDocker = seedTickets[2]; // Docker container fails (#4774)
+		const ticketTokens = seedTickets[7]; // Token count exceeds limit (#2464)
 
-		if (!ticket1 || !ticket2 || !ticket4) {
+		if (!ticketCpu || !ticketDocker || !ticketTokens) {
 			throw new Error("Required tickets not found for message seeding");
 		}
 
 		const seedMessages = [
-			// Conversation for ticket 1 (auth bug)
+			// Conversation for High CPU usage ticket (#4804)
 			{
 				id: crypto.randomUUID(),
-				ticketId: ticket1.id,
+				ticketId: ticketCpu.id,
 				role: "user" as const,
-				content: "I'm seeing authentication failures. Can you investigate?",
+				content:
+					"I'm seeing OpenCode using 100% CPU even when idle. Can you help me understand what's causing this?",
 				modelUsed: null,
-				createdAt: daysAndSecondsAgo(5, -60 * 60),
+				createdAt: daysAndSecondsAgo(1, -60 * 60),
 			},
 			{
 				id: crypto.randomUUID(),
-				ticketId: ticket1.id,
+				ticketId: ticketCpu.id,
 				role: "assistant" as const,
 				content:
-					"I've analyzed the authentication flow. The issue appears to be in the OAuth callback handler where token validation is failing. I recommend checking the token signature verification logic.",
-				modelUsed: "grok-4.1-fast",
-				createdAt: daysAndSecondsAgo(5, -60 * 62),
+					"I've analyzed the opentui rendering loop. The high CPU usage appears to be caused by the TUI framework's render cycle not properly yielding when there's no user input. Looking at packages/tui/src/render.ts, the animation frame loop runs continuously. I recommend adding an idle detection mechanism that reduces the render frequency when no input events are detected.",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(1, -60 * 62),
 			},
 			{
 				id: crypto.randomUUID(),
-				ticketId: ticket1.id,
+				ticketId: ticketCpu.id,
 				role: "user" as const,
-				content: "Thanks! I'll check the signature verification.",
+				content:
+					"That makes sense. Is there a quick workaround users can apply while waiting for a fix?",
 				modelUsed: null,
-				createdAt: daysAndSecondsAgo(5, -60 * 63),
-			},
-			// Conversation for ticket 2 (dark mode)
-			{
-				id: crypto.randomUUID(),
-				ticketId: ticket2.id,
-				role: "user" as const,
-				content: "What's the best approach for implementing dark mode?",
-				modelUsed: null,
-				createdAt: daysAndSecondsAgo(3, -60 * 30),
+				createdAt: daysAndSecondsAgo(1, -60 * 63),
 			},
 			{
 				id: crypto.randomUUID(),
-				ticketId: ticket2.id,
+				ticketId: ticketCpu.id,
 				role: "assistant" as const,
 				content:
-					"For dark mode, I recommend using CSS variables with a theme provider. You can use next-themes library which handles system preference detection and persistence. Store the preference in localStorage and apply it via a data attribute on the html element.",
-				modelUsed: "grok-4.1-fast",
-				createdAt: daysAndSecondsAgo(3, -60 * 32),
+					"Unfortunately there's no user-facing workaround since this is in the core rendering logic. However, users on laptops can mitigate battery impact by running OpenCode in a terminal with reduced refresh rate, or using a power profile that limits CPU frequency. The fix will need to come from the opentui package.",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(1, -60 * 65),
 			},
-			// Conversation for ticket 4 (Docker)
+			// Conversation for Docker container fails ticket (#4774)
 			{
 				id: crypto.randomUUID(),
-				ticketId: ticket4.id,
+				ticketId: ticketDocker.id,
 				role: "user" as const,
-				content: "Build time is too slow. Any suggestions?",
+				content:
+					"The OpenCode Docker container keeps failing on startup. The logs show bun install errors. What's going wrong?",
 				modelUsed: null,
-				createdAt: daysAndSecondsAgo(10, -60 * 120),
+				createdAt: daysAndSecondsAgo(2, -60 * 30),
 			},
 			{
 				id: crypto.randomUUID(),
-				ticketId: ticket4.id,
+				ticketId: ticketDocker.id,
 				role: "assistant" as const,
 				content:
-					"To optimize Docker build time: 1) Use multi-stage builds to reduce final image size, 2) Order Dockerfile commands to maximize layer caching (dependencies before code), 3) Use .dockerignore to exclude unnecessary files, 4) Consider BuildKit for parallel builds.",
-				modelUsed: "grok-4.1-fast",
-				createdAt: daysAndSecondsAgo(10, -60 * 122),
+					"Looking at the Dockerfile and entrypoint-opencode.sh, the issue is that bun install runs at container startup rather than build time. This causes problems in environments with restricted network access or when running as non-root. The fix should move dependency installation to the Dockerfile build stage and only run the application in the entrypoint.",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(2, -60 * 32),
+			},
+			// Conversation for token count exceeds limit (#2464)
+			{
+				id: crypto.randomUUID(),
+				ticketId: ticketTokens.id,
+				role: "user" as const,
+				content:
+					"I keep getting AT_APICallError about token limits. How does OpenCode handle context compaction?",
+				modelUsed: null,
+				createdAt: daysAndSecondsAgo(83, -60 * 120),
+			},
+			{
+				id: crypto.randomUUID(),
+				ticketId: ticketTokens.id,
+				role: "assistant" as const,
+				content:
+					"OpenCode has a /compact command that summarizes the conversation history to reduce token count. However, the error occurs because there's no automatic compaction before hitting the limit. The session API at POST /project/:projectID/session/:sessionID/compact can be called manually. A better UX would be to automatically trigger compaction when approaching 80% of the model's context limit.",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(83, -60 * 122),
+			},
+			{
+				id: crypto.randomUUID(),
+				ticketId: ticketTokens.id,
+				role: "user" as const,
+				content: "Can we add a warning before hitting the limit?",
+				modelUsed: null,
+				createdAt: daysAndSecondsAgo(83, -60 * 123),
+			},
+			{
+				id: crypto.randomUUID(),
+				ticketId: ticketTokens.id,
+				role: "assistant" as const,
+				content:
+					"Yes, that would be a good improvement. The token count is tracked in the message handler. We could add a warning when usage exceeds 90% and suggest running /compact. This should be implemented in packages/opencode/src/session/message.ts where the API call is made.",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(83, -60 * 125),
 			},
 		];
 
@@ -528,44 +584,64 @@ async function main() {
 		// ========================================================================
 		console.log("💡 Inserting ticket recommendations...");
 
-		const ticket5 = seedTickets[4]; // Payment tests
-		if (!ticket5) {
+		const ticketMemory = seedTickets[1]; // Memory issues (#3013)
+		const ticketAnthropicHeaders = seedTickets[4]; // Anthropic provider headers (#4792)
+		if (!ticketMemory || !ticketAnthropicHeaders) {
 			throw new Error("Required ticket not found for recommendation seeding");
 		}
 
 		const seedRecommendations = [
 			{
 				id: crypto.randomUUID(),
-				ticketId: ticket1.id,
+				ticketId: ticketCpu.id,
 				recommendedSteps:
-					"1. Review OAuth callback handler code\n2. Add logging for token validation failures\n3. Test with different OAuth providers\n4. Update error handling to provide better user feedback",
+					"1. Profile the opentui render loop in packages/tui/src/render.ts\n2. Add idle detection to reduce render frequency when no input events occur\n3. Implement requestIdleCallback or similar throttling mechanism\n4. Add performance metrics logging for debugging\n5. Test CPU usage on different platforms (macOS, Linux, Windows)",
 				recommendedProgrammer: "alice@example.com",
 				reasoning:
-					"This ticket requires deep understanding of authentication flows. Alice has experience with OAuth implementations and security best practices.",
-				modelUsed: "grok-4.1-fast",
-				createdAt: daysAndSecondsAgo(5, -60 * 67),
+					"This requires deep understanding of the opentui rendering architecture. Alice has experience with performance optimization and TUI frameworks.",
+				opencodeSummary:
+					"The CPU issue stems from the render loop in opentui not yielding during idle periods. Key files: packages/tui/src/render.ts, packages/tui/src/input.ts",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(1, -60 * 67),
 			},
 			{
 				id: crypto.randomUUID(),
-				ticketId: ticket2.id,
+				ticketId: ticketDocker.id,
 				recommendedSteps:
-					"1. Install next-themes package\n2. Create ThemeProvider component\n3. Add theme toggle button to header\n4. Define CSS variables for light/dark themes\n5. Test across different browsers",
+					"1. Move bun install from entrypoint-opencode.sh to Dockerfile\n2. Use multi-stage build to keep final image small\n3. Add proper error handling for network-restricted environments\n4. Test with rootless Docker and Podman\n5. Update documentation with troubleshooting steps",
 				recommendedProgrammer: null,
 				reasoning:
-					"This is a straightforward UI enhancement that any frontend developer can handle. No specific expertise required.",
-				modelUsed: "grok-4.1-fast",
-				createdAt: daysAndSecondsAgo(3, -60 * 33),
+					"This is a Docker configuration issue that any developer familiar with containerization can handle. The fix is straightforward once the root cause is understood.",
+				opencodeSummary:
+					"Docker startup fails because dependencies are installed at runtime instead of build time. Key files: Dockerfile, entrypoint-opencode.sh",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(2, -60 * 33),
 			},
 			{
 				id: crypto.randomUUID(),
-				ticketId: ticket5.id,
+				ticketId: ticketTokens.id,
 				recommendedSteps:
-					"1. Set up test framework (Jest/Vitest)\n2. Mock payment gateway responses\n3. Write tests for success scenarios\n4. Write tests for failure scenarios\n5. Add edge case coverage\n6. Set up CI to run tests automatically",
+					"1. Track token usage in packages/opencode/src/session/message.ts\n2. Add warning at 80% and 90% of model context limit\n3. Implement automatic /compact suggestion in the TUI\n4. Consider auto-compaction option in opencode.json config\n5. Improve error message to explain the issue and suggest solutions",
 				recommendedProgrammer: "alice@example.com",
 				reasoning:
-					"Payment processing requires careful testing. Alice has experience with financial systems and understands the importance of comprehensive test coverage.",
-				modelUsed: "grok-4.1-fast",
-				createdAt: daysAndSecondsAgo(2, -60 * 60),
+					"This requires understanding of the session message handling and token counting. Alice has worked on the context management features.",
+				opencodeSummary:
+					"Token limit errors occur because there's no proactive warning or automatic compaction. Key files: packages/opencode/src/session/message.ts, packages/opencode/src/command/compact.ts",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(83, -60 * 60),
+			},
+			{
+				id: crypto.randomUUID(),
+				ticketId: ticketAnthropicHeaders.id,
+				recommendedSteps:
+					"1. Review AI-SDK Anthropic provider configuration\n2. Check header merging logic in the provider wrapper\n3. Ensure custom anthropic-beta headers are preserved\n4. Add tests for header passthrough\n5. Document supported beta features in opencode.ai docs",
+				recommendedProgrammer: "bob@example.com",
+				reasoning:
+					"Bob has experience with the AI provider integrations and understands the AI-SDK internals. This requires careful header handling.",
+				opencodeSummary:
+					"The Anthropic provider in AI-SDK overwrites user-provided headers instead of merging them. Key files: packages/opencode/src/provider/anthropic.ts",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(2, -60 * 90),
 			},
 		];
 
@@ -579,71 +655,84 @@ async function main() {
 		// ========================================================================
 		console.log("📊 Inserting ticket rankings...");
 
-		const ticket3 = seedTickets[2]; // Documentation
-		if (!ticket3) {
+		const ticketFeature = seedTickets[6]; // Feature request (#4801)
+		const ticketCjk = seedTickets[5]; // CJK characters (#3734)
+		if (!ticketFeature || !ticketCjk) {
 			throw new Error("Required ticket not found for ranking seeding");
 		}
 
 		const seedRankings = [
 			{
 				id: crypto.randomUUID(),
-				ticketId: ticket1.id,
-				urgencyScore: 9.0,
-				impactScore: 8.5,
-				complexityScore: 6.5,
-				overallScore: 8.5,
-				reasoning:
-					"High urgency due to blocking user authentication. High impact as it affects all users. Moderate complexity as it's a focused bug fix.",
-				modelUsed: "grok-4.1-fast",
-				createdAt: daysAndSecondsAgo(5, -60 * 83),
-			},
-			{
-				id: crypto.randomUUID(),
-				ticketId: ticket2.id,
-				urgencyScore: 4.0,
-				impactScore: 6.0,
-				complexityScore: 5.0,
-				overallScore: 6.2,
-				reasoning:
-					"Low urgency as it's a feature enhancement. Moderate impact improving user experience. Low to moderate complexity.",
-				modelUsed: "grok-4.1-fast",
-				createdAt: daysAndSecondsAgo(3, -60 * 50),
-			},
-			{
-				id: crypto.randomUUID(),
-				ticketId: ticket5.id,
+				ticketId: ticketCpu.id,
 				urgencyScore: 9.5,
 				impactScore: 9.0,
 				complexityScore: 7.0,
-				overallScore: 9.1,
+				overallScore: 9.2,
 				reasoning:
-					"Very high urgency for payment-related code. Critical impact on financial transactions. Moderate complexity requiring comprehensive test coverage.",
-				modelUsed: "grok-4.1-fast",
-				createdAt: daysAndSecondsAgo(2, -60 * 67),
+					"Critical performance issue affecting all OpenCode users. High CPU usage drains laptop batteries and degrades system performance. Requires understanding of opentui internals.",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(1, -60 * 83),
 			},
 			{
 				id: crypto.randomUUID(),
-				ticketId: ticket3.id,
+				ticketId: ticketMemory.id,
+				urgencyScore: 8.0,
+				impactScore: 8.5,
+				complexityScore: 8.0,
+				overallScore: 8.7,
+				reasoning:
+					"Memory leaks cause OpenCode to become unusable in long sessions. High impact on power users who keep sessions open for hours. Complex to diagnose and fix.",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(51, -60 * 50),
+			},
+			{
+				id: crypto.randomUUID(),
+				ticketId: ticketTokens.id,
+				urgencyScore: 7.5,
+				impactScore: 8.0,
+				complexityScore: 5.0,
+				overallScore: 8.1,
+				reasoning:
+					"Token limit errors frustrate users working on large codebases. Medium complexity as the fix involves adding warnings and improving UX, not fundamental architecture changes.",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(83, -60 * 67),
+			},
+			{
+				id: crypto.randomUUID(),
+				ticketId: ticketDocker.id,
+				urgencyScore: 7.0,
+				impactScore: 7.5,
+				complexityScore: 4.0,
+				overallScore: 7.8,
+				reasoning:
+					"Blocks users trying to run OpenCode in containerized environments. Relatively simple fix once root cause is identified. Impacts enterprise and CI/CD users.",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(2, -60 * 30),
+			},
+			{
+				id: crypto.randomUUID(),
+				ticketId: ticketFeature.id,
 				urgencyScore: 3.0,
 				impactScore: 5.0,
-				complexityScore: 4.0,
-				overallScore: 4.1,
+				complexityScore: 3.0,
+				overallScore: 4.2,
 				reasoning:
-					"Low urgency documentation task. Moderate impact on developer onboarding. Low complexity.",
-				modelUsed: "grok-4.1-fast",
-				createdAt: daysAndSecondsAgo(7, -60 * 30),
+					"Nice-to-have feature for improved UX on exit. Low urgency and complexity. Moderate impact for users managing multiple sessions.",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(2, -60 * 45),
 			},
 			{
 				id: crypto.randomUUID(),
-				ticketId: ticket4.id,
-				urgencyScore: 5.0,
+				ticketId: ticketCjk.id,
+				urgencyScore: 6.0,
 				impactScore: 7.0,
 				complexityScore: 6.0,
-				overallScore: 7.3,
+				overallScore: 6.1,
 				reasoning:
-					"Moderate urgency for performance improvement. High impact on developer productivity. Moderate complexity requiring Docker expertise.",
-				modelUsed: "grok-4.1-fast",
-				createdAt: daysAndSecondsAgo(10, -60 * 133),
+					"Important for international users in East Asia. Requires understanding of IME composition and text input handling. Medium complexity due to cross-platform considerations.",
+				modelUsed: "claude-sonnet-4-20250514",
+				createdAt: daysAndSecondsAgo(26, -60 * 133),
 			},
 		];
 
