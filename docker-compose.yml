@@ -30,7 +30,7 @@ services:
       - "4096:4096"
     environment:
       # Set GIT_REPO_URL to clone a repository (or mount a volume instead)
-      - GIT_REPO_URL=${GIT_REPO_URL:-https://github.com/raphaelluethy/nvim}
+      - GIT_REPO_URL=${GIT_REPO_URL:-https://github.com/sst/opencode}
     volumes:
       # Mount a local repository read-only (alternative to GIT_REPO_URL)
       # Uncomment and adjust path as needed:
