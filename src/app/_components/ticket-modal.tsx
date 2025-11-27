@@ -403,10 +403,11 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 												key={msg.id}
 											>
 												<div
-													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${msg.role === "user"
+													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${
+														msg.role === "user"
 															? "bg-foreground text-background"
 															: "border border-border/60 bg-card/50"
-														}`}
+													}`}
 												>
 													<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
 														<Markdown>{msg.content}</Markdown>

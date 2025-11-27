@@ -134,6 +134,5 @@ export function isRepoAnalysisAvailable(): boolean {
 	const dockerSocket = process.env.DOCKER_SOCKET;
 	const opencodeImage = process.env.OPENCODE_IMAGE;
 
-	// For now, always return false since this is stubbed
-	return false && !!dockerSocket && !!opencodeImage;
+	return !!dockerSocket && !!opencodeImage;
 }
