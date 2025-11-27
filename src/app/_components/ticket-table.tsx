@@ -1,6 +1,4 @@
 "use client";
-
-import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +31,14 @@ type Ticket = typeof tickets.$inferSelect & {
 
 interface TicketTableProps {
 	onTicketSelect: (ticket: Ticket) => void;
+	viewMode: "standard" | "ai-ranked";
+	sortBy: "createdAt" | "priority" | "aiScore";
+	sortOrder: "asc" | "desc";
+	statusFilter: string;
+	onViewModeChange: (view: "standard" | "ai-ranked") => void;
+	onSortByChange: (sort: "createdAt" | "priority" | "aiScore") => void;
+	onSortOrderChange: (order: "asc" | "desc") => void;
+	onStatusFilterChange: (status: string) => void;
 }
 
 const priorityStyles: Record<string, string> = {
@@ -50,16 +56,17 @@ const statusStyles: Record<string, string> = {
 	closed: "bg-secondary/40 text-muted-foreground",
 };
 
-export function TicketTable({ onTicketSelect }: TicketTableProps) {
-	const [sortBy, setSortBy] = useState<"createdAt" | "priority" | "aiScore">(
-		"createdAt",
-	);
-	const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-	const [statusFilter, setStatusFilter] = useState<string>("all");
-	const [viewMode, setViewMode] = useState<"standard" | "ai-ranked">(
-		"standard",
-	);
-
+export function TicketTable({
+	onTicketSelect,
+	viewMode,
+	sortBy,
+	sortOrder,
+	statusFilter,
+	onViewModeChange,
+	onSortByChange,
+	onSortOrderChange,
+	onStatusFilterChange,
+}: TicketTableProps) {
 	const ticketsQuery = api.ticket.list.useQuery(
 		viewMode === "ai-ranked"
 			? undefined
@@ -123,7 +130,9 @@ export function TicketTable({ onTicketSelect }: TicketTableProps) {
 						View
 					</span>
 					<Select
-						onValueChange={(v) => setViewMode(v as "standard" | "ai-ranked")}
+						onValueChange={(v) =>
+							onViewModeChange(v as "standard" | "ai-ranked")
+						}
 						value={viewMode}
 					>
 						<SelectTrigger className="h-8 w-[120px] text-xs">
@@ -143,7 +152,7 @@ export function TicketTable({ onTicketSelect }: TicketTableProps) {
 								Sort
 							</span>
 							<Select
-								onValueChange={(v) => setSortBy(v as typeof sortBy)}
+								onValueChange={(v) => onSortByChange(v as typeof sortBy)}
 								value={sortBy}
 							>
 								<SelectTrigger className="h-8 w-[100px] text-xs">
@@ -158,7 +167,7 @@ export function TicketTable({ onTicketSelect }: TicketTableProps) {
 							<Button
 								className="h-8 w-8 p-0"
 								onClick={() =>
-									setSortOrder((o) => (o === "asc" ? "desc" : "asc"))
+									onSortOrderChange(sortOrder === "asc" ? "desc" : "asc")
 								}
 								size="sm"
 								variant="ghost"
@@ -171,7 +180,7 @@ export function TicketTable({ onTicketSelect }: TicketTableProps) {
 							<span className="text-muted-foreground text-xs uppercase tracking-wider">
 								Status
 							</span>
-							<Select onValueChange={setStatusFilter} value={statusFilter}>
+							<Select onValueChange={onStatusFilterChange} value={statusFilter}>
 								<SelectTrigger className="h-8 w-[110px] text-xs">
 									<SelectValue />
 								</SelectTrigger>

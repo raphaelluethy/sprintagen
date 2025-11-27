@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { CreateTicketDialog } from "@/app/_components/create-ticket-dialog";
 import { TicketModal } from "@/app/_components/ticket-modal";
 import { TicketTable } from "@/app/_components/ticket-table";
@@ -22,8 +23,73 @@ type Ticket = typeof tickets.$inferSelect & {
 };
 
 export default function Dashboard() {
+	const router = useRouter();
+	const pathname = usePathname();
+	const searchParams = useSearchParams();
+
+	// URL helper function
+	const updateSearchParams = (updates: Record<string, string | null>) => {
+		const params = new URLSearchParams(searchParams.toString());
+		for (const [key, value] of Object.entries(updates)) {
+			if (value === null) {
+				params.delete(key);
+			} else {
+				params.set(key, value);
+			}
+		}
+		router.push(`${pathname}?${params.toString()}`, { scroll: false });
+	};
+
+	// Derive ticketId from URL
+	const ticketIdParam = searchParams.get("ticketId");
+
+	// Derive view/sort/filter state from URL with defaults
+	const viewMode =
+		(searchParams.get("view") as "standard" | "ai-ranked") || "standard";
+	const sortBy =
+		(searchParams.get("sortBy") as "createdAt" | "priority" | "aiScore") ||
+		"createdAt";
+	const sortOrder = (searchParams.get("sortOrder") as "asc" | "desc") || "desc";
+	const statusFilter = searchParams.get("status") || "all";
+
+	// Validate and sanitize URL params
+	const validViewMode = viewMode === "ai-ranked" ? "ai-ranked" : "standard";
+	const validSortBy = ["createdAt", "priority", "aiScore"].includes(sortBy)
+		? sortBy
+		: "createdAt";
+	const validSortOrder = sortOrder === "asc" ? "asc" : "desc";
+	const validStatusFilter = [
+		"all",
+		"open",
+		"in_progress",
+		"review",
+		"done",
+		"closed",
+	].includes(statusFilter)
+		? statusFilter
+		: "all";
+
+	// Local state for selected ticket (for instant UI updates)
 	const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
-	const [modalOpen, setModalOpen] = useState(false);
+
+	// Derive modal open state from URL
+	const isModalOpen = !!ticketIdParam;
+
+	// Query for deep-linking: fetch ticket by ID when ticketIdParam is present
+	const deepLinkedTicketQuery = api.ticket.byId.useQuery(
+		{ id: ticketIdParam ?? "" },
+		{ enabled: !!ticketIdParam && !selectedTicket },
+	);
+
+	// Use deep-linked ticket if no locally selected ticket
+	const modalTicket = selectedTicket ?? deepLinkedTicketQuery.data ?? null;
+
+	// Sync selectedTicket when URL changes externally (e.g., browser back/forward)
+	useEffect(() => {
+		if (!ticketIdParam) {
+			setSelectedTicket(null);
+		}
+	}, [ticketIdParam]);
 
 	const utils = api.useUtils();
 
@@ -41,12 +107,29 @@ export default function Dashboard() {
 
 	const handleTicketSelect = (ticket: Ticket) => {
 		setSelectedTicket(ticket);
-		setModalOpen(true);
+		updateSearchParams({ ticketId: ticket.id });
 	};
 
 	const handleModalClose = () => {
-		setModalOpen(false);
 		setSelectedTicket(null);
+		updateSearchParams({ ticketId: null });
+	};
+
+	// Handlers for view/sort/filter changes
+	const handleViewModeChange = (view: "standard" | "ai-ranked") => {
+		updateSearchParams({ view });
+	};
+
+	const handleSortByChange = (sort: "createdAt" | "priority" | "aiScore") => {
+		updateSearchParams({ sortBy: sort });
+	};
+
+	const handleSortOrderChange = (order: "asc" | "desc") => {
+		updateSearchParams({ sortOrder: order });
+	};
+
+	const handleStatusFilterChange = (status: string) => {
+		updateSearchParams({ status: status === "all" ? null : status });
 	};
 
 	// Count tickets by status
@@ -217,14 +300,24 @@ export default function Dashboard() {
 				)}
 
 				{/* Ticket Table */}
-				<TicketTable onTicketSelect={handleTicketSelect} />
+				<TicketTable
+					onSortByChange={handleSortByChange}
+					onSortOrderChange={handleSortOrderChange}
+					onStatusFilterChange={handleStatusFilterChange}
+					onTicketSelect={handleTicketSelect}
+					onViewModeChange={handleViewModeChange}
+					sortBy={validSortBy}
+					sortOrder={validSortOrder}
+					statusFilter={validStatusFilter}
+					viewMode={validViewMode}
+				/>
 			</main>
 
 			{/* Ticket Detail Modal */}
 			<TicketModal
 				onClose={handleModalClose}
-				open={modalOpen}
-				ticket={selectedTicket}
+				open={isModalOpen}
+				ticket={modalTicket}
 			/>
 		</div>
 	);

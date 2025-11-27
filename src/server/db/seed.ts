@@ -498,7 +498,7 @@ async function main() {
 				role: "assistant" as const,
 				content:
 					"I've analyzed the opentui rendering loop. The high CPU usage appears to be caused by the TUI framework's render cycle not properly yielding when there's no user input. Looking at packages/tui/src/render.ts, the animation frame loop runs continuously. I recommend adding an idle detection mechanism that reduces the render frequency when no input events are detected.",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(1, -60 * 62),
 			},
 			{
@@ -516,7 +516,7 @@ async function main() {
 				role: "assistant" as const,
 				content:
 					"Unfortunately there's no user-facing workaround since this is in the core rendering logic. However, users on laptops can mitigate battery impact by running OpenCode in a terminal with reduced refresh rate, or using a power profile that limits CPU frequency. The fix will need to come from the opentui package.",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(1, -60 * 65),
 			},
 			// Conversation for Docker container fails ticket (#4774)
@@ -535,7 +535,7 @@ async function main() {
 				role: "assistant" as const,
 				content:
 					"Looking at the Dockerfile and entrypoint-opencode.sh, the issue is that bun install runs at container startup rather than build time. This causes problems in environments with restricted network access or when running as non-root. The fix should move dependency installation to the Dockerfile build stage and only run the application in the entrypoint.",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(2, -60 * 32),
 			},
 			// Conversation for token count exceeds limit (#2464)
@@ -554,7 +554,7 @@ async function main() {
 				role: "assistant" as const,
 				content:
 					"OpenCode has a /compact command that summarizes the conversation history to reduce token count. However, the error occurs because there's no automatic compaction before hitting the limit. The session API at POST /project/:projectID/session/:sessionID/compact can be called manually. A better UX would be to automatically trigger compaction when approaching 80% of the model's context limit.",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(83, -60 * 122),
 			},
 			{
@@ -571,7 +571,7 @@ async function main() {
 				role: "assistant" as const,
 				content:
 					"Yes, that would be a good improvement. The token count is tracked in the message handler. We could add a warning when usage exceeds 90% and suggest running /compact. This should be implemented in packages/opencode/src/session/message.ts where the API call is made.",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(83, -60 * 125),
 			},
 		];
@@ -601,7 +601,7 @@ async function main() {
 					"This requires deep understanding of the opentui rendering architecture. Alice has experience with performance optimization and TUI frameworks.",
 				opencodeSummary:
 					"The CPU issue stems from the render loop in opentui not yielding during idle periods. Key files: packages/tui/src/render.ts, packages/tui/src/input.ts",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(1, -60 * 67),
 			},
 			{
@@ -614,7 +614,7 @@ async function main() {
 					"This is a Docker configuration issue that any developer familiar with containerization can handle. The fix is straightforward once the root cause is understood.",
 				opencodeSummary:
 					"Docker startup fails because dependencies are installed at runtime instead of build time. Key files: Dockerfile, entrypoint-opencode.sh",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(2, -60 * 33),
 			},
 			{
@@ -627,7 +627,7 @@ async function main() {
 					"This requires understanding of the session message handling and token counting. Alice has worked on the context management features.",
 				opencodeSummary:
 					"Token limit errors occur because there's no proactive warning or automatic compaction. Key files: packages/opencode/src/session/message.ts, packages/opencode/src/command/compact.ts",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(83, -60 * 60),
 			},
 			{
@@ -640,7 +640,7 @@ async function main() {
 					"Bob has experience with the AI provider integrations and understands the AI-SDK internals. This requires careful header handling.",
 				opencodeSummary:
 					"The Anthropic provider in AI-SDK overwrites user-provided headers instead of merging them. Key files: packages/opencode/src/provider/anthropic.ts",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(2, -60 * 90),
 			},
 		];
@@ -671,7 +671,7 @@ async function main() {
 				overallScore: 9.2,
 				reasoning:
 					"Critical performance issue affecting all OpenCode users. High CPU usage drains laptop batteries and degrades system performance. Requires understanding of opentui internals.",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(1, -60 * 83),
 			},
 			{
@@ -683,7 +683,7 @@ async function main() {
 				overallScore: 8.7,
 				reasoning:
 					"Memory leaks cause OpenCode to become unusable in long sessions. High impact on power users who keep sessions open for hours. Complex to diagnose and fix.",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(51, -60 * 50),
 			},
 			{
@@ -695,7 +695,7 @@ async function main() {
 				overallScore: 8.1,
 				reasoning:
 					"Token limit errors frustrate users working on large codebases. Medium complexity as the fix involves adding warnings and improving UX, not fundamental architecture changes.",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(83, -60 * 67),
 			},
 			{
@@ -707,7 +707,7 @@ async function main() {
 				overallScore: 7.8,
 				reasoning:
 					"Blocks users trying to run OpenCode in containerized environments. Relatively simple fix once root cause is identified. Impacts enterprise and CI/CD users.",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(2, -60 * 30),
 			},
 			{
@@ -719,7 +719,7 @@ async function main() {
 				overallScore: 4.2,
 				reasoning:
 					"Nice-to-have feature for improved UX on exit. Low urgency and complexity. Moderate impact for users managing multiple sessions.",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(2, -60 * 45),
 			},
 			{
@@ -731,7 +731,7 @@ async function main() {
 				overallScore: 6.1,
 				reasoning:
 					"Important for international users in East Asia. Requires understanding of IME composition and text input handling. Medium complexity due to cross-platform considerations.",
-				modelUsed: "claude-sonnet-4-20250514",
+				modelUsed: "big-pickle",
 				createdAt: daysAndSecondsAgo(26, -60 * 133),
 			},
 		];

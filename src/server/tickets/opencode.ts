@@ -4,27 +4,140 @@ import { db } from "@/server/db";
 import { tickets } from "@/server/db/schema";
 
 /**
- * Opencode message part types
+ * Opencode message part types - matching admin/chats structure
  */
 interface TextPart {
+	id: string;
+	sessionID: string;
+	messageID: string;
 	type: "text";
 	text: string;
+	synthetic?: boolean;
+	ignored?: boolean;
+	time?: {
+		start: number;
+		end?: number;
+	};
+	metadata?: Record<string, unknown>;
 }
 
-interface ToolCallPart {
-	type: "tool-call";
-	toolName: string;
-	toolCallId: string;
-	args: unknown;
+interface ReasoningPart {
+	id: string;
+	sessionID: string;
+	messageID: string;
+	type: "reasoning";
+	text: string;
+	metadata?: Record<string, unknown>;
+	time: {
+		start: number;
+		end?: number;
+	};
 }
 
-interface ToolResultPart {
-	type: "tool-result";
-	toolCallId: string;
-	result: unknown;
+interface ToolStatePending {
+	status: "pending";
+	input: Record<string, unknown>;
+	raw: string;
 }
 
-type MessagePart = TextPart | ToolCallPart | ToolResultPart;
+interface ToolStateRunning {
+	status: "running";
+	input: Record<string, unknown>;
+	title?: string;
+	metadata?: Record<string, unknown>;
+	time: {
+		start: number;
+	};
+}
+
+interface ToolStateCompleted {
+	status: "completed";
+	input: Record<string, unknown>;
+	output: string;
+	title: string;
+	metadata: Record<string, unknown>;
+	time: {
+		start: number;
+		end: number;
+		compacted?: number;
+	};
+}
+
+interface ToolStateError {
+	status: "error";
+	input: Record<string, unknown>;
+	error: string;
+	metadata?: Record<string, unknown>;
+	time: {
+		start: number;
+		end: number;
+	};
+}
+
+export type ToolState =
+	| ToolStatePending
+	| ToolStateRunning
+	| ToolStateCompleted
+	| ToolStateError;
+
+interface ToolPart {
+	id: string;
+	sessionID: string;
+	messageID: string;
+	type: "tool";
+	callID: string;
+	tool: string;
+	state: ToolState;
+	metadata?: Record<string, unknown>;
+}
+
+interface StepStartPart {
+	id: string;
+	sessionID: string;
+	messageID: string;
+	type: "step-start";
+	snapshot?: string;
+}
+
+interface StepFinishPart {
+	id: string;
+	sessionID: string;
+	messageID: string;
+	type: "step-finish";
+	reason: string;
+	snapshot?: string;
+	cost: number;
+	tokens: {
+		input: number;
+		output: number;
+		reasoning: number;
+		cache: {
+			read: number;
+			write: number;
+		};
+	};
+}
+
+interface FilePart {
+	id: string;
+	sessionID: string;
+	messageID: string;
+	type: "file";
+	mime: string;
+	filename?: string;
+	url: string;
+}
+
+export type MessagePart =
+	| TextPart
+	| ReasoningPart
+	| ToolPart
+	| StepStartPart
+	| StepFinishPart
+	| FilePart;
+
+// Export types for frontend use
+export type { ToolPart, ReasoningPart };
 
 /**
  * Opencode message structure
@@ -66,6 +179,10 @@ export interface OpencodeChatMessage {
 		toolName: string;
 		toolCallId: string;
 	}[];
+	// Full parts array for rendering steps/tools/reasoning
+	parts?: MessagePart[];
+	// Reasoning text if available
+	reasoning?: string;
 }
 
 /**
@@ -171,29 +288,52 @@ function extractTextFromParts(parts: MessagePart[]): string {
 }
 
 /**
- * Extract tool calls from Opencode message parts
+ * Extract reasoning content from Opencode message parts
+ */
+function extractReasoningFromParts(parts: MessagePart[]): string {
+	return parts
+		.filter((p): p is ReasoningPart => p.type === "reasoning")
+		.map((p) => p.text)
+		.join("\n")
+		.trim();
+}
+
+/**
+ * Extract tool calls from Opencode message parts (for backward compatibility)
  */
 function extractToolCalls(
 	parts: MessagePart[],
 ): { toolName: string; toolCallId: string }[] {
 	return parts
-		.filter((p): p is ToolCallPart => p.type === "tool-call")
-		.map((p) => ({ toolName: p.toolName, toolCallId: p.toolCallId }));
+		.filter((p): p is ToolPart => p.type === "tool")
+		.map((p) => ({ toolName: p.tool, toolCallId: p.callID }));
 }
 
 /**
  * Map Opencode message to chat DTO
  */
-function mapToOpencodeChatMessage(msg: OpencodeMessage): OpencodeChatMessage {
+function mapToOpencodeChatMessage(
+	msg: OpencodeMessage | null | undefined,
+): OpencodeChatMessage | null {
+	if (!msg || !msg.info) {
+		return null;
+	}
+
+	const parts = msg.parts ?? [];
+	const reasoning = extractReasoningFromParts(parts);
 	return {
 		id: msg.info.id,
 		role: msg.info.role,
-		text: extractTextFromParts(msg.parts),
+		text: extractTextFromParts(parts),
 		createdAt: new Date(msg.info.createdAt),
 		model: msg.info.model
 			? `${msg.info.model.providerID}/${msg.info.model.modelID}`
 			: undefined,
-		toolCalls: extractToolCalls(msg.parts),
+		toolCalls: extractToolCalls(parts),
+		// Include full parts for step/tool rendering
+		parts: parts.length > 0 ? parts : undefined,
+		// Include reasoning if available
+		reasoning: reasoning || undefined,
 	};
 }
 
@@ -225,8 +365,37 @@ export async function getOpencodeMessages(
 			};
 		}
 
-		const messages = (await response.json()) as OpencodeMessage[];
-		const mapped = messages.map(mapToOpencodeChatMessage);
+		const responseData = await response.json();
+
+		// Check if the response is an error object (Opencode may return errors with 200 status)
+		if (
+			responseData.error ||
+			(responseData.data?.message && !Array.isArray(responseData))
+		) {
+			const errorMessage =
+				responseData.data?.message ||
+				responseData.message ||
+				responseData.error ||
+				"Opencode returned an error";
+			return {
+				success: false,
+				error: errorMessage,
+			};
+		}
+
+		// Handle case where response might be wrapped in a data property
+		const messagesArray = responseData.data || responseData;
+		if (!Array.isArray(messagesArray)) {
+			return {
+				success: false,
+				error: "Invalid response format from Opencode",
+			};
+		}
+
+		const messages = messagesArray as OpencodeMessage[];
+		const mapped = messages
+			.map(mapToOpencodeChatMessage)
+			.filter((msg): msg is OpencodeChatMessage => msg !== null);
 
 		return { success: true, data: mapped };
 	} catch (error) {
@@ -272,11 +441,18 @@ export async function sendOpencodeMessage(
 			payload.agent = options.agent;
 		}
 
-		// Use provided model if both providerID and modelID are set
+		// Use provided model if both providerID and modelID are set,
+		// otherwise default to big-pickle for ticket flows
 		if (options?.providerID && options?.modelID) {
 			payload.model = {
 				providerID: options.providerID,
 				modelID: options.modelID,
+			};
+		} else {
+			// Default to big-pickle for ticket Opencode calls
+			payload.model = {
+				providerID: "opencode",
+				modelID: "big-pickle",
 			};
 		}
 
@@ -294,10 +470,46 @@ export async function sendOpencodeMessage(
 			};
 		}
 
-		const assistantMessage = (await response.json()) as OpencodeMessage;
+		const responseData = await response.json();
+
+		// Check if the response is an error object (Opencode may return errors with 200 status)
+		if (
+			responseData.error ||
+			(responseData.data?.message && !responseData.info)
+		) {
+			const errorMessage =
+				responseData.data?.message ||
+				responseData.message ||
+				responseData.error ||
+				"Opencode returned an error";
+			return {
+				success: false,
+				error: errorMessage,
+			};
+		}
+
+		// Handle case where response might be wrapped in a data property
+		const messageData = responseData.data || responseData;
+		if (!messageData || !messageData.info) {
+			return {
+				success: false,
+				error: "Invalid response format from Opencode",
+			};
+		}
+
+		const assistantMessage = messageData as OpencodeMessage;
+		const mapped = mapToOpencodeChatMessage(assistantMessage);
+
+		if (!mapped) {
+			return {
+				success: false,
+				error: "Failed to map Opencode message response",
+			};
+		}
+
 		return {
 			success: true,
-			data: mapToOpencodeChatMessage(assistantMessage),
+			data: mapped,
 		};
 	} catch (error) {
 		const message =

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,16 @@ import type {
 	ticketRecommendations,
 	tickets,
 } from "@/server/db/schema";
+import type {
+	MessagePart,
+	ReasoningPart,
+	ToolPart,
+} from "@/server/tickets/opencode";
 import { api } from "@/trpc/react";
+import {
+	OpencodeReasoningDisplay,
+	OpencodeToolCallDisplay,
+} from "./opencode-tool-call";
 
 type Ticket = typeof tickets.$inferSelect & {
 	recommendations?: (typeof ticketRecommendations.$inferSelect)[];
@@ -36,12 +45,182 @@ interface OpencodeChatMessage {
 	createdAt: Date;
 	model?: string;
 	toolCalls?: { toolName: string; toolCallId: string }[];
+	parts?: MessagePart[];
+	reasoning?: string;
 }
 
 interface TicketModalProps {
 	ticket: Ticket | null;
 	open: boolean;
 	onClose: () => void;
+}
+
+// Live analysis progress component for Ask Opencode
+function LiveAnalysisProgress({
+	steps,
+}: {
+	steps: { tool: string; title: string; status: string; id: string }[];
+}) {
+	// Map tool names to user-friendly descriptions
+	const getToolDescription = (tool: string, title: string) => {
+		if (title) return title;
+
+		const toolDescriptions: Record<string, string> = {
+			read: "Reading file...",
+			write: "Writing file...",
+			edit: "Editing file...",
+			glob: "Searching for files...",
+			grep: "Searching in files...",
+			bash: "Running command...",
+			list: "Listing directory...",
+			search: "Searching codebase...",
+			task: "Running task...",
+		};
+
+		const lowerTool = tool.toLowerCase();
+		for (const [key, desc] of Object.entries(toolDescriptions)) {
+			if (lowerTool.includes(key)) return desc;
+		}
+		return `Running ${tool}...`;
+	};
+
+	const getStatusIcon = (status: string) => {
+		switch (status) {
+			case "completed":
+				return (
+					<svg
+						aria-hidden="true"
+						className="h-3.5 w-3.5 text-green-500"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							d="M5 13l4 4L19 7"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth={2}
+						/>
+					</svg>
+				);
+			case "error":
+				return (
+					<svg
+						aria-hidden="true"
+						className="h-3.5 w-3.5 text-destructive"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							d="M6 18L18 6M6 6l12 12"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth={2}
+						/>
+					</svg>
+				);
+			case "running":
+			case "pending":
+			default:
+				return (
+					<svg
+						aria-hidden="true"
+						className="h-3.5 w-3.5 animate-spin text-muted-foreground"
+						fill="none"
+						viewBox="0 0 24 24"
+					>
+						<circle
+							className="opacity-25"
+							cx="12"
+							cy="12"
+							r="10"
+							stroke="currentColor"
+							strokeWidth="4"
+						/>
+						<path
+							className="opacity-75"
+							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+							fill="currentColor"
+						/>
+					</svg>
+				);
+		}
+	};
+
+	return (
+		<div className="space-y-3">
+			<div className="flex items-center gap-2">
+				<svg
+					aria-hidden="true"
+					className="h-4 w-4 animate-pulse text-foreground"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth={2}
+					/>
+				</svg>
+				<span className="font-medium text-foreground text-sm">
+					Analyzing with Opencode...
+				</span>
+			</div>
+
+			{steps.length === 0 ? (
+				<div className="flex items-center gap-2 rounded-md border border-border/60 bg-card/50 px-3 py-2">
+					<svg
+						aria-hidden="true"
+						className="h-3.5 w-3.5 animate-spin text-muted-foreground"
+						fill="none"
+						viewBox="0 0 24 24"
+					>
+						<circle
+							className="opacity-25"
+							cx="12"
+							cy="12"
+							r="10"
+							stroke="currentColor"
+							strokeWidth="4"
+						/>
+						<path
+							className="opacity-75"
+							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+							fill="currentColor"
+						/>
+					</svg>
+					<span className="text-muted-foreground text-sm">
+						Starting analysis...
+					</span>
+				</div>
+			) : (
+				<div className="space-y-1.5">
+					{steps.map((step, index) => (
+						<div
+							className={`flex items-center gap-2 rounded-md border px-3 py-2 transition-all ${index === steps.length - 1 &&
+									(step.status === "running" || step.status === "pending")
+									? "border-foreground/20 bg-foreground/5"
+									: "border-border/60 bg-card/50"
+								}`}
+							key={step.id}
+						>
+							{getStatusIcon(step.status)}
+							<span className="font-mono text-muted-foreground text-xs">
+								{step.tool}
+							</span>
+							<span className="text-muted-foreground">→</span>
+							<span className="flex-1 truncate text-sm">
+								{getToolDescription(step.tool, step.title)}
+							</span>
+						</div>
+					))}
+				</div>
+			)}
+		</div>
+	);
 }
 
 const priorityStyles: Record<string, string> = {
@@ -139,11 +318,86 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 		},
 	});
 
+	// State for tracking live analysis steps during "Ask Opencode"
+	const [liveAnalysisSteps, setLiveAnalysisSteps] = useState<
+		{ tool: string; title: string; status: string; id: string }[]
+	>([]);
+	const lastSeenToolCountRef = useRef(0);
+
 	const askOpencodeMutation = api.ticket.askOpencode.useMutation({
+		onMutate: () => {
+			// Reset live steps when starting analysis
+			setLiveAnalysisSteps([]);
+			lastSeenToolCountRef.current = 0;
+		},
 		onSuccess: () => {
 			void ticketQuery.refetch();
+			void opencodeChatQuery.refetch();
+			// Clear live steps after a brief delay to show completion
+			setTimeout(() => setLiveAnalysisSteps([]), 500);
+		},
+		onError: () => {
+			setLiveAnalysisSteps([]);
 		},
 	});
+
+	// Poll for live analysis steps when askOpencode is running
+	const pollForSteps = useCallback(async () => {
+		if (!ticket?.id || !askOpencodeMutation.isPending) return;
+
+		try {
+			// Fetch latest messages from the Opencode chat
+			const response = await fetch(
+				`/api/trpc/ticket.getOpencodeChat?batch=1&input=${encodeURIComponent(
+					JSON.stringify({ "0": { json: { ticketId: ticket.id } } }),
+				)}`,
+			);
+			if (!response.ok) return;
+
+			const data = await response.json();
+			const messages = data?.[0]?.result?.data?.json ?? [];
+
+			// Extract tool calls from the latest assistant message
+			const assistantMessages = messages.filter(
+				(m: OpencodeChatMessage) => m.role === "assistant",
+			);
+			if (assistantMessages.length === 0) return;
+
+			const latestMessage = assistantMessages[assistantMessages.length - 1];
+			const toolParts =
+				latestMessage?.parts?.filter((p: MessagePart) => p.type === "tool") ??
+				[];
+
+			// Only update if we have new tools
+			if (toolParts.length > lastSeenToolCountRef.current) {
+				lastSeenToolCountRef.current = toolParts.length;
+				setLiveAnalysisSteps(
+					toolParts.map((t: ToolPart) => ({
+						id: t.id,
+						tool: t.tool,
+						title:
+							t.state.status === "completed" || t.state.status === "running"
+								? (t.state.title ?? "")
+								: "",
+						status: t.state.status,
+					})),
+				);
+			}
+		} catch {
+			// Silently ignore polling errors
+		}
+	}, [ticket?.id, askOpencodeMutation.isPending]);
+
+	// Set up polling interval when analyzing
+	useEffect(() => {
+		if (!askOpencodeMutation.isPending) return;
+
+		// Poll immediately and then every 500ms
+		pollForSteps();
+		const interval = setInterval(pollForSteps, 500);
+
+		return () => clearInterval(interval);
+	}, [askOpencodeMutation.isPending, pollForSteps]);
 
 	// Scroll to bottom when messages change
 	useEffect(() => {
@@ -428,13 +682,14 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 								</Button>
 							</div>
 
-							{recommendationsMutation.isPending ||
-							askOpencodeMutation.isPending ? (
+							{recommendationsMutation.isPending ? (
 								<div className="space-y-3">
 									<Skeleton className="h-4 w-full" />
 									<Skeleton className="h-4 w-3/4" />
 									<Skeleton className="h-4 w-5/6" />
 								</div>
+							) : askOpencodeMutation.isPending ? (
+								<LiveAnalysisProgress steps={liveAnalysisSteps} />
 							) : latestRecommendation ? (
 								<div className="space-y-6">
 									{latestRecommendation.recommendedSteps && (
@@ -523,11 +778,10 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 												key={msg.id}
 											>
 												<div
-													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${
-														msg.role === "user"
+													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${msg.role === "user"
 															? "bg-foreground text-background"
 															: "border border-border/60 bg-card/50"
-													}`}
+														}`}
 												>
 													<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
 														<Markdown>{msg.content}</Markdown>
@@ -631,37 +885,82 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 													</p>
 												</div>
 											) : (
-												opencodeMessages.map((msg) => (
-													<div
-														className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-														key={msg.id}
-													>
+												opencodeMessages.map((msg) => {
+													const isUser = msg.role === "user";
+													const toolParts =
+														msg.parts?.filter(
+															(p): p is ToolPart => p.type === "tool",
+														) ?? [];
+													const reasoningParts =
+														msg.parts?.filter(
+															(p): p is ReasoningPart => p.type === "reasoning",
+														) ?? [];
+													const hasReasoning =
+														reasoningParts.length > 0 || msg.reasoning;
+													const reasoningText =
+														msg.reasoning ??
+														reasoningParts
+															.map((p) => p.text)
+															.join("\n")
+															.trim();
+
+													return (
 														<div
-															className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${
-																msg.role === "user"
-																	? "bg-foreground text-background"
-																	: "border border-border/60 bg-card/50"
-															}`}
+															className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+															key={msg.id}
 														>
-															<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
-																<Markdown>{msg.text}</Markdown>
-															</div>
-															<div className="mt-1 flex items-center gap-2 text-xs tabular-nums opacity-50">
-																<span>
-																	{new Date(msg.createdAt).toLocaleTimeString()}
-																</span>
-																{msg.model && (
-																	<Badge
-																		className="h-4 px-1 font-normal text-[10px]"
-																		variant="outline"
-																	>
-																		{msg.model}
-																	</Badge>
+															<div
+																className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${isUser
+																		? "bg-foreground text-background"
+																		: "border border-border/60 bg-card/50"
+																	}`}
+															>
+																{/* Reasoning section (collapsible) for assistant messages */}
+																{!isUser && hasReasoning && (
+																	<OpencodeReasoningDisplay
+																		reasoning={reasoningText}
+																	/>
 																)}
+
+																{/* Tool calls (for assistant messages) */}
+																{!isUser && toolParts.length > 0 && (
+																	<div className="mb-3">
+																		{toolParts.map((tool) => (
+																			<OpencodeToolCallDisplay
+																				key={tool.id}
+																				tool={tool}
+																			/>
+																		))}
+																	</div>
+																)}
+
+																{/* Text content */}
+																{msg.text && (
+																	<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
+																		<Markdown>{msg.text}</Markdown>
+																	</div>
+																)}
+
+																{/* Timestamp and model badge */}
+																<div className="mt-1 flex items-center gap-2 text-xs tabular-nums opacity-50">
+																	<span>
+																		{new Date(
+																			msg.createdAt,
+																		).toLocaleTimeString()}
+																	</span>
+																	{msg.model && (
+																		<Badge
+																			className="h-4 px-1 font-normal text-[10px]"
+																			variant="outline"
+																		>
+																			{msg.model}
+																		</Badge>
+																	)}
+																</div>
 															</div>
 														</div>
-													</div>
-												))
+													);
+												})
 											)}
 											{sendOpencodeMutation.isPending && (
 												<div className="flex justify-start">
