@@ -1,6 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 interface Session {
 	id: string;
@@ -330,16 +343,23 @@ function ToolCallDisplay({ tool }: { tool: ToolPart }) {
 	const output = getToolOutput(tool.state);
 	const preview = getToolPreview(tool.state);
 
+	const statusStyles = {
+		completed: "bg-foreground/5 text-foreground/60",
+		error: "bg-destructive/10 text-destructive",
+		running: "bg-foreground/5 text-foreground/60",
+		pending: "bg-foreground/5 text-foreground/40",
+	};
+
 	return (
-		<div className="my-2 overflow-hidden rounded-lg border border-[#27272a] bg-[#18181b]">
+		<div className="my-2 overflow-hidden rounded-md border border-border/60 bg-card/50">
 			<button
-				className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-[#27272a]/50"
+				className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-secondary/50"
 				onClick={() => setIsExpanded(!isExpanded)}
 				type="button"
 			>
 				<svg
 					aria-hidden="true"
-					className={`h-3 w-3 text-[#71717a] transition-transform ${isExpanded ? "rotate-90" : ""}`}
+					className={`h-3 w-3 text-muted-foreground transition-transform ${isExpanded ? "rotate-90" : ""}`}
 					fill="none"
 					stroke="currentColor"
 					viewBox="0 0 24 24"
@@ -351,45 +371,37 @@ function ToolCallDisplay({ tool }: { tool: ToolPart }) {
 						strokeWidth={2}
 					/>
 				</svg>
-				<span className="font-mono text-amber-400">{tool.tool}</span>
-				<span className="text-[#52525b]">→</span>
-				<span className="flex-1 truncate text-[#a1a1aa]">
+				<span className="font-mono text-foreground">{tool.tool}</span>
+				<span className="text-muted-foreground">→</span>
+				<span className="flex-1 truncate text-muted-foreground">
 					{title || JSON.stringify(tool.state.input).slice(0, 50)}
 				</span>
 				<span
-					className={`rounded px-1.5 py-0.5 font-medium text-[10px] ${
-						tool.state.status === "completed"
-							? "bg-emerald-500/20 text-emerald-400"
-							: tool.state.status === "error"
-								? "bg-red-500/20 text-red-400"
-								: tool.state.status === "running"
-									? "bg-blue-500/20 text-blue-400"
-									: "bg-yellow-500/20 text-yellow-400"
-					}`}
+					className={`rounded px-1.5 py-0.5 font-medium text-[10px] ${statusStyles[tool.state.status]}`}
 				>
 					{tool.state.status}
 				</span>
 			</button>
 			{isExpanded && (
-				<div className="space-y-2 border-[#27272a] border-t p-3">
+				<div className="space-y-2 border-border/60 border-t bg-background/50 p-3">
 					<div>
-						<span className="text-[#52525b] text-[10px] uppercase tracking-wider">
+						<span className="text-[10px] text-muted-foreground uppercase tracking-wider">
 							Input
 						</span>
-						<pre className="mt-1 overflow-x-auto rounded bg-[#0f0f14] p-2 text-[#a1a1aa] text-xs">
+						<pre className="mt-1 overflow-x-auto rounded bg-secondary/50 p-2 text-foreground/80 text-xs">
 							{JSON.stringify(tool.state.input, null, 2)}
 						</pre>
 					</div>
 					{output && (
 						<div>
-							<span className="text-[#52525b] text-[10px] uppercase tracking-wider">
+							<span className="text-[10px] text-muted-foreground uppercase tracking-wider">
 								{tool.state.status === "error" ? "Error" : "Output"}
 							</span>
 							<pre
-								className={`mt-1 max-h-64 overflow-x-auto overflow-y-auto rounded bg-[#0f0f14] p-2 text-xs ${
+								className={`mt-1 max-h-64 overflow-x-auto overflow-y-auto rounded bg-secondary/50 p-2 text-xs ${
 									tool.state.status === "error"
-										? "text-red-400"
-										: "text-[#a1a1aa]"
+										? "text-destructive"
+										: "text-foreground/80"
 								}`}
 							>
 								{preview || output.slice(0, 1000)}
@@ -423,7 +435,7 @@ function renderMarkdown(text: string): React.ReactNode {
 		const key = `${i}-${part.slice(0, 10)}`;
 		if (part.startsWith("**") && part.endsWith("**")) {
 			return (
-				<strong className="text-[#e4e4e7]" key={key}>
+				<strong className="text-foreground" key={key}>
 					{part.slice(2, -2)}
 				</strong>
 			);
@@ -446,50 +458,46 @@ function MessageDisplay({ message }: { message: OpencodeMessage }) {
 	return (
 		<div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
 			<div
-				className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+				className={`max-w-[85%] rounded-lg px-4 py-3 ${
 					isUser
-						? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white"
-						: "bg-[#1c1c22] text-[#e4e4e7]"
+						? "bg-foreground text-background"
+						: "border border-border/60 bg-card/50 text-foreground"
 				}`}
 			>
 				{/* Role & Model badge for assistant */}
 				{isAssistantMessage(message.info) && (
-					<div className="mb-2 flex flex-wrap items-center gap-2 border-[#27272a] border-b pb-2">
-						<span className="font-medium text-[10px] text-emerald-400 uppercase tracking-wider">
+					<div className="mb-2 flex flex-wrap items-center gap-2 border-border/40 border-b pb-2">
+						<span className="font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
 							{message.info.mode || "assistant"}
 						</span>
-						<span className="text-[#27272a]">•</span>
-						<span className="font-mono text-[#52525b] text-[10px]">
+						<span className="text-border">•</span>
+						<span className="font-mono text-[10px] text-muted-foreground">
 							{message.info.providerID}/{message.info.modelID}
 						</span>
 						{message.info.tokens && (
 							<>
-								<span className="text-[#27272a]">•</span>
-								<span className="text-[#52525b] text-[10px]">
-									{message.info.tokens.input + message.info.tokens.output}{" "}
-									tokens
+								<span className="text-border">•</span>
+								<span className="text-[10px] text-muted-foreground">
+									{message.info.tokens.input + message.info.tokens.output} tok
 								</span>
 							</>
 						)}
 						{message.info.finish && (
-							<span
-								className={`rounded px-1.5 py-0.5 font-medium text-[10px] ${
-									message.info.finish === "stop"
-										? "bg-emerald-500/20 text-emerald-400"
-										: message.info.finish === "tool-calls"
-											? "bg-amber-500/20 text-amber-400"
-											: "bg-[#27272a] text-[#71717a]"
-								}`}
+							<Badge
+								className="h-4 px-1 text-[10px]"
+								variant={
+									message.info.finish === "stop" ? "default" : "secondary"
+								}
 							>
 								{message.info.finish}
-							</span>
+							</Badge>
 						)}
 					</div>
 				)}
 
 				{/* User message agent/model info */}
 				{isUserMessage(message.info) && (
-					<div className="mb-2 flex items-center gap-2 border-white/20 border-b pb-2 text-white/70">
+					<div className="mb-2 flex items-center gap-2 border-background/20 border-b pb-2 text-background/70">
 						<span className="text-[10px] uppercase tracking-wider">
 							→ {message.info.agent}
 						</span>
@@ -500,7 +508,7 @@ function MessageDisplay({ message }: { message: OpencodeMessage }) {
 				{!isUser && reasoningContent && (
 					<div className="mb-3">
 						<button
-							className="flex items-center gap-1 text-[10px] text-purple-400 transition-colors hover:text-purple-300"
+							className="flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
 							onClick={() => setShowReasoning(!showReasoning)}
 							type="button"
 						>
@@ -521,7 +529,7 @@ function MessageDisplay({ message }: { message: OpencodeMessage }) {
 							Reasoning
 						</button>
 						{showReasoning && (
-							<div className="mt-2 rounded border border-purple-500/20 bg-purple-500/10 p-2 text-purple-200 text-xs italic">
+							<div className="mt-2 rounded border border-border/40 bg-secondary/30 p-2 text-muted-foreground text-xs italic">
 								{reasoningContent}
 							</div>
 						)}
@@ -546,13 +554,13 @@ function MessageDisplay({ message }: { message: OpencodeMessage }) {
 
 				{/* Error display */}
 				{isAssistantMessage(message.info) && message.info.error && (
-					<div className="mt-3 rounded border border-red-500/20 bg-red-500/10 p-2">
-						<span className="font-medium text-red-400 text-xs">
+					<div className="mt-3 rounded border border-destructive/20 bg-destructive/10 p-2">
+						<span className="font-medium text-destructive text-xs">
 							{message.info.error.name}
 						</span>
-						{message.info.error.data?.message && (
-							<p className="mt-1 text-red-300 text-xs">
-								{String(message.info.error.data.message)}
+						{typeof message.info.error.data?.message === "string" && (
+							<p className="mt-1 text-destructive/80 text-xs">
+								{message.info.error.data.message}
 							</p>
 						)}
 					</div>
@@ -561,7 +569,7 @@ function MessageDisplay({ message }: { message: OpencodeMessage }) {
 				{/* Timestamp */}
 				{message.info.time.created && (
 					<span
-						className={`mt-2 block text-xs ${isUser ? "text-white/60" : "text-[#52525b]"}`}
+						className={`mt-2 block text-xs ${isUser ? "text-background/60" : "text-muted-foreground"}`}
 					>
 						{new Date(message.info.time.created).toLocaleString()}
 					</span>
@@ -586,10 +594,8 @@ export default function AdminChatsPage() {
 	>("checking");
 	const [authStatus, setAuthStatus] = useState<string | null>(null);
 	const [providers, setProviders] = useState<Provider[]>([]);
-	const [selectedProvider, setSelectedProvider] = useState<string>("anthropic");
-	const [selectedModel, setSelectedModel] = useState<string>(
-		"claude-sonnet-4-20250514",
-	);
+	const [selectedProvider, setSelectedProvider] = useState<string>("opencode");
+	const [selectedModel, setSelectedModel] = useState<string>("big-pickle");
 	const [agents, setAgents] = useState<Agent[]>([]);
 	const [selectedAgent, setSelectedAgent] = useState<string>("docs-agent");
 
@@ -856,53 +862,48 @@ export default function AdminChatsPage() {
 	};
 
 	return (
-		<div className="min-h-screen bg-[#0a0a0f] text-[#e4e4e7]">
+		<div className="flex h-screen flex-col bg-background">
 			{/* Header */}
-			<header className="border-[#27272a] border-b bg-[#0f0f14]/80 backdrop-blur-sm">
-				<div className="container mx-auto flex items-center justify-between px-6 py-4">
-					<div className="flex items-center gap-3">
-						<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
-							<svg
-								aria-hidden="true"
-								className="h-5 w-5 text-white"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path
-									d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-								/>
-							</svg>
-						</div>
-						<h1 className="font-semibold text-xl tracking-tight">
-							Opencode Chat
-						</h1>
-					</div>
-					<div className="flex items-center gap-4">
-						{authStatus && (
-							<span className="text-[#71717a] text-xs">{authStatus}</span>
-						)}
-						<span
-							className={`flex items-center gap-2 rounded-full px-3 py-1.5 font-medium text-xs ${
-								healthStatus === "healthy"
-									? "bg-emerald-500/10 text-emerald-400"
-									: healthStatus === "unhealthy"
-										? "bg-red-500/10 text-red-400"
-										: "bg-yellow-500/10 text-yellow-400"
-							}`}
+			<header className="flex h-14 shrink-0 items-center justify-between border-border/40 border-b px-6">
+				<div className="flex items-center gap-4">
+					<a
+						className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
+						href="/"
+					>
+						<svg
+							aria-hidden="true"
+							className="h-4 w-4"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
 						>
-							<span
-								className={`h-2 w-2 rounded-full ${
-									healthStatus === "healthy"
-										? "bg-emerald-400"
-										: healthStatus === "unhealthy"
-											? "bg-red-400"
-											: "animate-pulse bg-yellow-400"
-								}`}
+							<path
+								d="M15 19l-7-7 7-7"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
 							/>
+						</svg>
+						<span className="text-sm">Back</span>
+					</a>
+					<div className="h-4 w-px bg-border" />
+					<h1 className="font-medium text-sm">Opencode Chat</h1>
+				</div>
+				<div className="flex items-center gap-4">
+					{authStatus && (
+						<span className="text-muted-foreground text-xs">{authStatus}</span>
+					)}
+					<div className="flex items-center gap-2">
+						<div
+							className={`h-2 w-2 rounded-full ${
+								healthStatus === "healthy"
+									? "bg-foreground"
+									: healthStatus === "unhealthy"
+										? "bg-destructive"
+										: "animate-pulse bg-muted-foreground"
+							}`}
+						/>
+						<span className="text-muted-foreground text-xs">
 							{healthStatus === "checking"
 								? "Connecting..."
 								: healthStatus === "healthy"
@@ -910,60 +911,33 @@ export default function AdminChatsPage() {
 									: "Disconnected"}
 						</span>
 					</div>
+					<ThemeToggle />
 				</div>
 			</header>
 
 			{/* Main Content */}
-			<div className="flex h-[calc(100vh-73px)]">
+			<div className="flex min-h-0 flex-1">
 				{/* Sidebar - Sessions List */}
-				<aside className="w-80 flex-shrink-0 border-[#27272a] border-r bg-[#0f0f14]/50">
-					<div className="flex h-full flex-col">
-						<div className="border-[#27272a] border-b p-4">
-							<button
-								className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-2.5 font-medium text-sm text-white transition-all hover:from-emerald-600 hover:to-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
-								disabled={isLoading || healthStatus !== "healthy"}
-								onClick={createSession}
-								type="button"
-							>
-								<svg
-									aria-hidden="true"
-									className="h-4 w-4"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										d="M12 4v16m8-8H4"
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-									/>
-								</svg>
-								New Session
-							</button>
-						</div>
+				<aside className="flex w-72 shrink-0 flex-col border-border/40 border-r bg-card/30">
+					<div className="border-border/40 border-b p-4">
+						<Button
+							className="w-full"
+							disabled={isLoading || healthStatus !== "healthy"}
+							onClick={createSession}
+							size="sm"
+						>
+							New Session
+						</Button>
+					</div>
 
-						<div className="flex-1 overflow-y-auto p-2">
+					<ScrollArea className="flex-1">
+						<div className="p-2">
 							{sessions.length === 0 ? (
 								<div className="flex flex-col items-center justify-center py-12 text-center">
-									<div className="mb-3 rounded-full bg-[#27272a] p-3">
-										<svg
-											aria-hidden="true"
-											className="h-6 w-6 text-[#71717a]"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-										>
-											<path
-												d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-												strokeLinecap="round"
-												strokeLinejoin="round"
-												strokeWidth={2}
-											/>
-										</svg>
-									</div>
-									<p className="text-[#71717a] text-sm">No sessions yet</p>
-									<p className="text-[#52525b] text-xs">
+									<p className="text-muted-foreground text-sm">
+										No sessions yet
+									</p>
+									<p className="text-muted-foreground/60 text-xs">
 										Create one to get started
 									</p>
 								</div>
@@ -971,22 +945,20 @@ export default function AdminChatsPage() {
 								<div className="space-y-1">
 									{sessions.map((session) => (
 										<button
-											className={`w-full rounded-lg p-3 text-left transition-all ${
+											className={`w-full rounded-md px-3 py-2.5 text-left transition-colors ${
 												selectedSessionId === session.id
-													? "bg-emerald-500/10 text-emerald-400"
-													: "text-[#a1a1aa] hover:bg-[#27272a]/50 hover:text-[#e4e4e7]"
+													? "bg-secondary text-foreground"
+													: "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
 											}`}
 											key={session.id}
 											onClick={() => setSelectedSessionId(session.id)}
 											type="button"
 										>
-											<div className="flex items-start justify-between gap-2">
-												<span className="truncate font-medium text-sm">
-													{session.title || `Session ${session.id.slice(0, 8)}`}
-												</span>
-											</div>
+											<span className="block truncate text-sm">
+												{session.title || `Session ${session.id.slice(0, 8)}`}
+											</span>
 											{session.createdAt && (
-												<span className="mt-1 block text-[#52525b] text-xs">
+												<span className="mt-0.5 block text-[11px] opacity-60">
 													{formatTimestamp(session.createdAt)}
 												</span>
 											)}
@@ -995,23 +967,23 @@ export default function AdminChatsPage() {
 								</div>
 							)}
 						</div>
-					</div>
+					</ScrollArea>
 				</aside>
 
 				{/* Main Chat Area */}
-				<main className="flex flex-1 flex-col">
+				<main className="flex min-w-0 flex-1 flex-col">
 					{error && (
-						<div className="border-red-500/20 border-b bg-red-500/10 px-6 py-3">
-							<p className="text-red-400 text-sm">{error}</p>
+						<div className="border-destructive/20 border-b bg-destructive/10 px-6 py-3">
+							<p className="text-destructive text-sm">{error}</p>
 						</div>
 					)}
 
 					{!selectedSessionId ? (
 						<div className="flex flex-1 flex-col items-center justify-center">
-							<div className="mb-4 rounded-full bg-[#27272a] p-4">
+							<div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-border/60">
 								<svg
 									aria-hidden="true"
-									className="h-8 w-8 text-[#52525b]"
+									className="h-6 w-6 text-muted-foreground"
 									fill="none"
 									stroke="currentColor"
 									viewBox="0 0 24 24"
@@ -1020,157 +992,166 @@ export default function AdminChatsPage() {
 										d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
 										strokeLinecap="round"
 										strokeLinejoin="round"
-										strokeWidth={2}
+										strokeWidth={1.5}
 									/>
 								</svg>
 							</div>
-							<h2 className="mb-2 font-medium text-[#a1a1aa] text-lg">
+							<h2 className="mb-1 font-medium text-foreground">
 								Select a session
 							</h2>
-							<p className="text-[#52525b] text-sm">
+							<p className="text-muted-foreground text-sm">
 								Choose an existing session or create a new one
 							</p>
 						</div>
 					) : (
 						<>
 							{/* Messages Area */}
-							<div className="flex-1 overflow-y-auto p-6">
-								{messages.length === 0 ? (
-									<div className="flex h-full flex-col items-center justify-center">
-										<div className="mb-4 rounded-full bg-[#27272a] p-4">
-											<svg
-												aria-hidden="true"
-												className="h-8 w-8 text-[#52525b]"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-											>
-												<path
-													d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													strokeWidth={2}
-												/>
-											</svg>
+							<ScrollArea className="flex-1">
+								<div className="mx-auto max-w-3xl p-6">
+									{messages.length === 0 ? (
+										<div className="flex h-full flex-col items-center justify-center py-20">
+											<div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-border/60">
+												<svg
+													aria-hidden="true"
+													className="h-6 w-6 text-muted-foreground"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={1.5}
+													/>
+												</svg>
+											</div>
+											<p className="text-muted-foreground text-sm">
+												No messages yet
+											</p>
+											<p className="text-muted-foreground/60 text-xs">
+												Send a message to start the conversation
+											</p>
 										</div>
-										<p className="text-[#71717a] text-sm">No messages yet</p>
-										<p className="text-[#52525b] text-xs">
-											Send a message to start the conversation
-										</p>
-									</div>
-								) : (
-									<div className="space-y-4">
-										{messages.map((message, index) => (
-											<MessageDisplay
-												key={message.info.id || `msg-${index}`}
-												message={message}
-											/>
-										))}
-									</div>
-								)}
-							</div>
+									) : (
+										<div className="space-y-4">
+											{messages.map((message, index) => (
+												<MessageDisplay
+													key={message.info.id || `msg-${index}`}
+													message={message}
+												/>
+											))}
+										</div>
+									)}
+								</div>
+							</ScrollArea>
 
 							{/* Message Input */}
-							<div className="border-[#27272a] border-t bg-[#0f0f14]/80 p-4">
-								{/* Agent/Provider/Model Selection */}
-								<div className="mb-3 flex gap-3">
-									<select
-										className="rounded-lg border border-[#27272a] bg-[#1c1c22] px-3 py-2 text-[#e4e4e7] text-sm outline-none focus:border-emerald-500/50"
-										disabled={agents.length === 0}
-										onChange={(e) => setSelectedAgent(e.target.value)}
-										value={agents.length === 0 ? "" : selectedAgent}
-									>
-										{agents.length === 0 ? (
-											<option value="">Loading agents...</option>
-										) : (
-											agents.map((agent) => (
-												<option key={agent.name} value={agent.name}>
-													{agent.name}
-													{agent.description ? ` - ${agent.description}` : ""}
-												</option>
-											))
-										)}
-									</select>
-									<select
-										className="rounded-lg border border-[#27272a] bg-[#1c1c22] px-3 py-2 text-[#e4e4e7] text-sm outline-none focus:border-emerald-500/50"
-										onChange={(e) => setSelectedProvider(e.target.value)}
-										value={selectedProvider}
-									>
-										<option value="anthropic">Anthropic</option>
-										<option value="openai">OpenAI</option>
-										<option value="cerebras">Cerebras</option>
-										{providers.map((p) => (
-											<option key={p.id} value={p.id}>
-												{p.name || p.id}
-											</option>
-										))}
-									</select>
-									<input
-										className="flex-1 rounded-lg border border-[#27272a] bg-[#1c1c22] px-3 py-2 text-[#e4e4e7] text-sm outline-none focus:border-emerald-500/50"
-										onChange={(e) => setSelectedModel(e.target.value)}
-										placeholder="Model ID (e.g., claude-sonnet-4-20250514)"
-										type="text"
-										value={selectedModel}
-									/>
-								</div>
-								<div className="flex gap-3">
-									<textarea
-										className="flex-1 resize-none rounded-xl border border-[#27272a] bg-[#1c1c22] px-4 py-3 text-[#e4e4e7] text-sm placeholder-[#52525b] outline-none transition-colors focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
-										onChange={(e) => setNewMessage(e.target.value)}
-										onKeyDown={(e) => {
-											if (e.key === "Enter" && !e.shiftKey) {
-												e.preventDefault();
-												sendMessage();
+							<div className="border-border/40 border-t bg-card/30 p-4">
+								<div className="mx-auto max-w-3xl">
+									{/* Agent/Provider/Model Selection */}
+									<div className="mb-3 flex flex-wrap gap-2">
+										<Select
+											disabled={agents.length === 0}
+											onValueChange={setSelectedAgent}
+											value={agents.length === 0 ? "" : selectedAgent}
+										>
+											<SelectTrigger className="h-8 w-[160px] text-xs">
+												<SelectValue placeholder="Select agent" />
+											</SelectTrigger>
+											<SelectContent>
+												{agents.map((agent) => (
+													<SelectItem key={agent.name} value={agent.name}>
+														{agent.name}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+										<Select
+											onValueChange={setSelectedProvider}
+											value={selectedProvider}
+										>
+											<SelectTrigger className="h-8 w-[130px] text-xs">
+												<SelectValue />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="anthropic">Anthropic</SelectItem>
+												<SelectItem value="openai">OpenAI</SelectItem>
+												<SelectItem value="cerebras">Cerebras</SelectItem>
+												{providers.map((p) => (
+													<SelectItem key={p.id} value={p.id}>
+														{p.name || p.id}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+										<Input
+											className="h-8 flex-1 text-xs"
+											onChange={(e) => setSelectedModel(e.target.value)}
+											placeholder="Model ID"
+											value={selectedModel}
+										/>
+									</div>
+									<div className="flex gap-3">
+										<Textarea
+											className="min-h-[44px] flex-1 resize-none text-sm"
+											onChange={(e) => setNewMessage(e.target.value)}
+											onKeyDown={(e) => {
+												if (e.key === "Enter" && !e.shiftKey) {
+													e.preventDefault();
+													sendMessage();
+												}
+											}}
+											placeholder="Type your message..."
+											rows={1}
+											value={newMessage}
+										/>
+										<Button
+											className="h-auto px-4"
+											disabled={
+												!newMessage.trim() || isSending || !selectedAgent
 											}
-										}}
-										placeholder="Type your message..."
-										rows={1}
-										value={newMessage}
-									/>
-									<button
-										className="flex items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-3 text-white transition-all hover:from-emerald-600 hover:to-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
-										disabled={!newMessage.trim() || isSending || !selectedAgent}
-										onClick={sendMessage}
-										type="button"
-									>
-										{isSending ? (
-											<svg
-												aria-hidden="true"
-												className="h-5 w-5 animate-spin"
-												fill="none"
-												viewBox="0 0 24 24"
-											>
-												<circle
-													className="opacity-25"
-													cx="12"
-													cy="12"
-													r="10"
+											onClick={sendMessage}
+										>
+											{isSending ? (
+												<svg
+													aria-hidden="true"
+													className="h-4 w-4 animate-spin"
+													fill="none"
+													viewBox="0 0 24 24"
+												>
+													<circle
+														className="opacity-25"
+														cx="12"
+														cy="12"
+														r="10"
+														stroke="currentColor"
+														strokeWidth="4"
+													/>
+													<path
+														className="opacity-75"
+														d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+														fill="currentColor"
+													/>
+												</svg>
+											) : (
+												<svg
+													aria-hidden="true"
+													className="h-4 w-4"
+													fill="none"
 													stroke="currentColor"
-													strokeWidth="4"
-												/>
-												<path
-													className="opacity-75"
-													d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-													fill="currentColor"
-												/>
-											</svg>
-										) : (
-											<svg
-												aria-hidden="true"
-												className="h-5 w-5"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-											>
-												<path
-													d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													strokeWidth={2}
-												/>
-											</svg>
-										)}
-									</button>
+													viewBox="0 0 24 24"
+												>
+													<path
+														d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth={2}
+													/>
+												</svg>
+											)}
+										</Button>
+									</div>
 								</div>
 							</div>
 						</>

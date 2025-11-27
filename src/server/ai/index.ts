@@ -1,4 +1,3 @@
-import { env } from "@/env";
 import {
 	type AnalyzeOptions,
 	analyzeWithCerebras,
@@ -40,20 +39,14 @@ export const DEFAULT_MODEL = OPENROUTER_DEFAULT_MODEL;
 /**
  * Determine which AI provider to use based on configuration.
  * Priority:
- * 1. If AI_PROVIDER_MODE is explicitly set to "openrouter-only", use OpenRouter
- * 2. If only one provider is configured, use that one
- * 3. If both are configured, prefer Cerebras for analysis (faster inference)
+ * 1. If only one provider is configured, use that one
+ * 2. If both are configured, prefer OpenRouter
  */
 export type AIProviderMode = "openrouter" | "cerebras" | "none";
 
 export function getActiveAIProvider(): AIProviderMode {
 	const openRouterAvailable = isOpenRouterConfigured();
 	const cerebrasAvailable = isCerebrasConfigured();
-
-	// Explicit mode override
-	if (env.AI_PROVIDER_MODE === "openrouter-only" && openRouterAvailable) {
-		return "openrouter";
-	}
 
 	// If only one is configured, use that one
 	if (openRouterAvailable && !cerebrasAvailable) {

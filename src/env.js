@@ -24,6 +24,18 @@ export const env = createEnv({
 		// Provider auth (e.g., "anthropic", "openai", "cerebras")
 		OPENCODE_PROVIDER_ID: z.string().optional(),
 		OPENCODE_PROVIDER_API_KEY: z.string().optional(),
+		// AI Providers
+		CEREBRAS_API_KEY: z.string().optional(),
+		OPENROUTER_API_KEY: z.string().optional(),
+		// Ticket Providers - Jira
+		JIRA_BASE_URL: z.string().optional(),
+		JIRA_API_TOKEN: z.string().optional(),
+		JIRA_PROJECT_KEY: z.string().optional(),
+		// Ticket Providers - Linear
+		LINEAR_API_KEY: z.string().optional(),
+		// Docker configuration
+		DOCKER_SOCKET: z.string().optional(),
+		OPENCODE_IMAGE: z.string().optional(),
 	},
 
 	/**
@@ -51,6 +63,18 @@ export const env = createEnv({
 		OPENCODE_DIRECTORY: process.env.OPENCODE_DIRECTORY,
 		OPENCODE_PROVIDER_ID: process.env.OPENCODE_PROVIDER_ID,
 		OPENCODE_PROVIDER_API_KEY: process.env.OPENCODE_PROVIDER_API_KEY,
+		// AI Providers
+		CEREBRAS_API_KEY: process.env.CEREBRAS_API_KEY,
+		OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+		// Ticket Providers - Jira
+		JIRA_BASE_URL: process.env.JIRA_BASE_URL,
+		JIRA_API_TOKEN: process.env.JIRA_API_TOKEN,
+		JIRA_PROJECT_KEY: process.env.JIRA_PROJECT_KEY,
+		// Ticket Providers - Linear
+		LINEAR_API_KEY: process.env.LINEAR_API_KEY,
+		// Docker configuration
+		DOCKER_SOCKET: process.env.DOCKER_SOCKET,
+		OPENCODE_IMAGE: process.env.OPENCODE_IMAGE,
 	},
 	/**
 	 * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
