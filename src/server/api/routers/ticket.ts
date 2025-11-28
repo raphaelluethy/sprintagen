@@ -28,6 +28,7 @@ import {
 import {
 	askOpencodeQuestion,
 	checkOpencodeHealth,
+	createNewOpencodeSessionForTicket,
 	getOpencodeMessages,
 	sendOpencodeMessage,
 } from "@/server/tickets/opencode";
@@ -553,10 +554,62 @@ export const ticketRouter = createTRPCRouter({
 	}),
 
 	/**
+	 * Start a new Opencode session for a ticket.
+	 * Creates a fresh session and returns the sessionId without sending any message.
+	 * Used by the UI to create per-open chat sessions.
+	 */
+	startOpencodeSession: publicProcedure
+		.input(z.object({ ticketId: z.string() }))
+		.mutation(async ({ ctx, input }) => {
+			// Get ticket for title
+			const ticket = await ctx.db.query.tickets.findFirst({
+				where: eq(tickets.id, input.ticketId),
+			});
+
+			if (!ticket) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Ticket not found",
+				});
+			}
+
+			const result = await createNewOpencodeSessionForTicket(
+				input.ticketId,
+				ticket.title,
+			);
+
+			if (!result.success) {
+				let userMessage = result.error;
+				if (result.error.includes("Failed to create")) {
+					userMessage =
+						"Unable to create Opencode session. Please check if the server is running.";
+				}
+
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: userMessage,
+					cause: result.error,
+				});
+			}
+
+			return {
+				sessionId: result.data.sessionId,
+			};
+		}),
+
+	/**
 	 * Get Opencode chat messages for a ticket
+	 * Returns messages along with session metadata for UI boundary detection.
+	 * Uses lookup-only behavior: won't create a session if none exists.
+	 * Optionally accepts an explicit sessionId to fetch messages from a specific session.
 	 */
 	getOpencodeChat: publicProcedure
-		.input(z.object({ ticketId: z.string() }))
+		.input(
+			z.object({
+				ticketId: z.string(),
+				sessionId: z.string().optional(),
+			}),
+		)
 		.query(async ({ ctx, input }) => {
 			// Get ticket for title
 			const ticket = await ctx.db.query.tickets.findFirst({
@@ -570,20 +623,45 @@ export const ticketRouter = createTRPCRouter({
 				});
 			}
 
-			const result = await getOpencodeMessages(input.ticketId, ticket.title);
+			const result = await getOpencodeMessages(
+				input.ticketId,
+				ticket.title,
+				input.sessionId,
+			);
 
 			if (!result.success) {
+				// Provide actionable error messages
+				let userMessage = result.error;
+				if (
+					result.error.includes("ENOENT") ||
+					result.error.includes("NotFoundError")
+				) {
+					userMessage =
+						"Opencode session expired. A new session will be created automatically.";
+				} else if (result.error.includes("Failed to fetch")) {
+					userMessage =
+						"Unable to reach Opencode server. Please check if it's running.";
+				}
+
 				throw new TRPCError({
 					code: "INTERNAL_SERVER_ERROR",
-					message: result.error,
+					message: userMessage,
+					cause: result.error,
 				});
 			}
 
-			return result.data;
+			// Return messages with session metadata
+			return {
+				messages: result.data.messages,
+				currentSessionId: result.data.currentSessionId,
+				isNewSession: result.data.isNewSession,
+			};
 		}),
 
 	/**
 	 * Send a message to a ticket's Opencode session
+	 * Returns the assistant's response along with session metadata.
+	 * Optionally accepts an explicit sessionId to send into a specific session.
 	 */
 	sendOpencodeChatMessage: publicProcedure
 		.input(
@@ -591,6 +669,7 @@ export const ticketRouter = createTRPCRouter({
 				ticketId: z.string(),
 				message: z.string().min(1),
 				agent: z.string().optional(),
+				sessionId: z.string().optional(),
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
@@ -610,21 +689,41 @@ export const ticketRouter = createTRPCRouter({
 				input.ticketId,
 				ticket.title,
 				input.message,
-				{ agent: input.agent },
+				input.sessionId,
 			);
 
 			if (!result.success) {
+				// Provide actionable error messages
+				let userMessage = result.error;
+				if (
+					result.error.includes("ENOENT") ||
+					result.error.includes("NotFoundError")
+				) {
+					userMessage =
+						"Previous session expired. A new session was created—please retry your message.";
+				} else if (result.error.includes("Failed to send")) {
+					userMessage =
+						"Failed to send message to Opencode. Please check if the server is running.";
+				}
+
 				throw new TRPCError({
 					code: "INTERNAL_SERVER_ERROR",
-					message: result.error,
+					message: userMessage,
+					cause: result.error,
 				});
 			}
 
-			return result.data;
+			// Return message with session metadata
+			return {
+				...result.data.message,
+				sessionId: result.data.sessionId,
+				isNewSession: result.data.isNewSession,
+			};
 		}),
 
 	/**
 	 * Ask Opencode about implementing a ticket and store the result
+	 * Handles stale sessions gracefully and reports session boundaries
 	 */
 	askOpencode: publicProcedure
 		.input(
@@ -705,9 +804,26 @@ export const ticketRouter = createTRPCRouter({
 			);
 
 			if (!result.success) {
+				// Provide actionable error messages
+				let userMessage = result.error;
+				if (
+					result.error.includes("ENOENT") ||
+					result.error.includes("NotFoundError")
+				) {
+					userMessage =
+						"Previous Opencode session expired. A new session was created—please try again.";
+				} else if (result.error.includes("Failed to create")) {
+					userMessage =
+						"Unable to create Opencode session. Please check if the server is running.";
+				} else if (result.error.includes("Failed to send")) {
+					userMessage =
+						"Failed to communicate with Opencode. Please check if the server is running.";
+				}
+
 				throw new TRPCError({
 					code: "INTERNAL_SERVER_ERROR",
-					message: result.error,
+					message: userMessage,
+					cause: result.error,
 				});
 			}
 
@@ -716,14 +832,16 @@ export const ticketRouter = createTRPCRouter({
 				.insert(ticketRecommendations)
 				.values({
 					ticketId: input.ticketId,
-					opencodeSummary: result.data,
+					opencodeSummary: result.data.answer,
 					modelUsed: "opencode",
 				})
 				.returning();
 
 			return {
-				answer: result.data,
+				answer: result.data.answer,
 				recommendation,
+				sessionId: result.data.sessionId,
+				isNewSession: result.data.isNewSession,
 			};
 		}),
 });

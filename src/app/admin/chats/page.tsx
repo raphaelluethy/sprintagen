@@ -214,7 +214,6 @@ interface OpencodeMessage {
 	parts: MessagePart[];
 }
 
-
 // Debug logger with styled output
 const DEBUG = process.env.NODE_ENV === "development";
 const log = {
@@ -379,10 +378,11 @@ function ToolCallDisplay({ tool }: { tool: ToolPart }) {
 								{tool.state.status === "error" ? "Error" : "Output"}
 							</span>
 							<pre
-								className={`mt-1 max-h-64 overflow-x-auto overflow-y-auto rounded bg-secondary/50 p-2 text-xs ${tool.state.status === "error"
-									? "text-destructive"
-									: "text-foreground/80"
-									}`}
+								className={`mt-1 max-h-64 overflow-x-auto overflow-y-auto rounded bg-secondary/50 p-2 text-xs ${
+									tool.state.status === "error"
+										? "text-destructive"
+										: "text-foreground/80"
+								}`}
 							>
 								{preview || output.slice(0, 1000)}
 								{output.length > 1000 && !preview && "..."}
@@ -438,10 +438,11 @@ function MessageDisplay({ message }: { message: OpencodeMessage }) {
 	return (
 		<div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
 			<div
-				className={`max-w-[85%] rounded-lg px-4 py-3 ${isUser
-					? "bg-foreground text-background"
-					: "border border-border/60 bg-card/50 text-foreground"
-					}`}
+				className={`max-w-[85%] rounded-lg px-4 py-3 ${
+					isUser
+						? "bg-foreground text-background"
+						: "border border-border/60 bg-card/50 text-foreground"
+				}`}
 			>
 				{/* Role & Model badge for assistant */}
 				{isAssistantMessage(message.info) && (
@@ -840,12 +841,13 @@ export default function AdminChatsPage() {
 					</div>
 					<div className="flex items-center gap-2">
 						<div
-							className={`h-2 w-2 rounded-full ${healthStatus === "healthy"
-								? "bg-foreground"
-								: healthStatus === "unhealthy"
-									? "bg-destructive"
-									: "animate-pulse bg-muted-foreground"
-								}`}
+							className={`h-2 w-2 rounded-full ${
+								healthStatus === "healthy"
+									? "bg-foreground"
+									: healthStatus === "unhealthy"
+										? "bg-destructive"
+										: "animate-pulse bg-muted-foreground"
+							}`}
 						/>
 						<span className="text-muted-foreground text-xs">
 							{healthStatus === "checking"
@@ -889,10 +891,11 @@ export default function AdminChatsPage() {
 								<div className="space-y-1">
 									{sessions.map((session) => (
 										<button
-											className={`w-full rounded-md px-3 py-2.5 text-left transition-colors ${selectedSessionId === session.id
-												? "bg-secondary text-foreground"
-												: "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
-												}`}
+											className={`w-full rounded-md px-3 py-2.5 text-left transition-colors ${
+												selectedSessionId === session.id
+													? "bg-secondary text-foreground"
+													: "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+											}`}
 											key={session.id}
 											onClick={() => setSelectedSessionId(session.id)}
 											type="button"

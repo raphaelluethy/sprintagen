@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { CreateTicketDialog } from "@/app/_components/create-ticket-dialog";
 import { TicketModal } from "@/app/_components/ticket-modal";
 import { TicketTable } from "@/app/_components/ticket-table";
@@ -22,7 +22,7 @@ type Ticket = typeof tickets.$inferSelect & {
 	rankings?: (typeof ticketRankings.$inferSelect)[];
 };
 
-export default function Dashboard() {
+function DashboardContent() {
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
@@ -72,6 +72,11 @@ export default function Dashboard() {
 	// Local state for selected ticket (for instant UI updates)
 	const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
 
+	// Track tickets with pending Ask Opencode runs (persists when modal closes)
+	const [pendingAskTicketIds, setPendingAskTicketIds] = useState<Set<string>>(
+		new Set(),
+	);
+
 	// Derive modal open state from URL
 	const isModalOpen = !!ticketIdParam;
 
@@ -104,6 +109,39 @@ export default function Dashboard() {
 			void utils.ticket.list.invalidate();
 		},
 	});
+
+	// Ask Opencode mutation - lifted to Dashboard level so it persists when modal closes
+	const askOpencodeMutation = api.ticket.askOpencode.useMutation({
+		onMutate: (variables) => {
+			// Add ticket to pending set
+			setPendingAskTicketIds((prev) => new Set([...prev, variables.ticketId]));
+		},
+		onSettled: (_data, _error, variables) => {
+			// Remove ticket from pending set on success or error
+			setPendingAskTicketIds((prev) => {
+				const next = new Set(prev);
+				next.delete(variables.ticketId);
+				return next;
+			});
+			// Invalidate ticket data to refresh recommendations
+			void utils.ticket.byId.invalidate({ id: variables.ticketId });
+			void utils.ticket.list.invalidate();
+		},
+	});
+
+	// Handler for Ask Opencode - callable from TicketModal
+	const handleAskOpencode = useCallback(
+		(ticketId: string) => {
+			askOpencodeMutation.mutate({ ticketId });
+		},
+		[askOpencodeMutation],
+	);
+
+	// Check if a specific ticket has a pending Ask Opencode run
+	const isAskOpencodePending = useCallback(
+		(ticketId: string) => pendingAskTicketIds.has(ticketId),
+		[pendingAskTicketIds],
+	);
 
 	const handleTicketSelect = (ticket: Ticket) => {
 		setSelectedTicket(ticket);
@@ -306,6 +344,7 @@ export default function Dashboard() {
 					onStatusFilterChange={handleStatusFilterChange}
 					onTicketSelect={handleTicketSelect}
 					onViewModeChange={handleViewModeChange}
+					pendingAskTicketIds={pendingAskTicketIds}
 					sortBy={validSortBy}
 					sortOrder={validSortOrder}
 					statusFilter={validStatusFilter}
@@ -315,10 +354,20 @@ export default function Dashboard() {
 
 			{/* Ticket Detail Modal */}
 			<TicketModal
+				isAskOpencodePending={isAskOpencodePending}
+				onAskOpencode={handleAskOpencode}
 				onClose={handleModalClose}
 				open={isModalOpen}
 				ticket={modalTicket}
 			/>
 		</div>
+	);
+}
+
+export default function Dashboard() {
+	return (
+		<Suspense fallback={<div className="min-h-screen">Loading...</div>}>
+			<DashboardContent />
+		</Suspense>
 	);
 }

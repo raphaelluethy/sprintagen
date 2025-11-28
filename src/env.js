@@ -78,8 +78,8 @@ export const env = createEnv({
 		DOCKER_SOCKET: process.env.DOCKER_SOCKET,
 		OPENCODE_IMAGE: process.env.OPENCODE_IMAGE,
 		FAST_MODE: process.env.FAST_MODE === "true",
-		// Client-side - use same FAST_MODE variable
-		NEXT_PUBLIC_FAST_MODE: process.env.FAST_MODE === "true",
+		// Client-side - use NEXT_PUBLIC_ prefixed variable
+		NEXT_PUBLIC_FAST_MODE: process.env.NEXT_PUBLIC_FAST_MODE === "true",
 	},
 	/**
 	 * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

@@ -47,12 +47,49 @@ interface OpencodeChatMessage {
 	toolCalls?: { toolName: string; toolCallId: string }[];
 	parts?: MessagePart[];
 	reasoning?: string;
+	sessionId?: string;
+}
+
+/**
+ * Session boundary separator component
+ * Displays when messages from different Opencode sessions are shown
+ */
+function SessionBoundary() {
+	return (
+		<div className="flex items-center gap-3 py-4">
+			<div className="h-px flex-1 bg-border/60" />
+			<div className="flex items-center gap-2 rounded-md border border-border/60 bg-card/30 px-3 py-1.5">
+				<svg
+					aria-hidden="true"
+					className="h-3.5 w-3.5 text-muted-foreground"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth={1.5}
+					/>
+				</svg>
+				<span className="text-muted-foreground text-xs">
+					New Opencode session started
+				</span>
+			</div>
+			<div className="h-px flex-1 bg-border/60" />
+		</div>
+	);
 }
 
 interface TicketModalProps {
 	ticket: Ticket | null;
 	open: boolean;
 	onClose: () => void;
+	// Ask Opencode callback - lifted to parent so it persists when modal closes
+	onAskOpencode: (ticketId: string) => void;
+	// Check if a specific ticket has a pending Ask Opencode run
+	isAskOpencodePending: (ticketId: string) => boolean;
 }
 
 // Live analysis progress component for Ask Opencode
@@ -200,12 +237,11 @@ function LiveAnalysisProgress({
 				<div className="space-y-1.5">
 					{steps.map((step, index) => (
 						<div
-							className={`flex items-center gap-2 rounded-md border px-3 py-2 transition-all ${
-								index === steps.length - 1 &&
-								(step.status === "running" || step.status === "pending")
+							className={`flex items-center gap-2 rounded-md border px-3 py-2 transition-all ${index === steps.length - 1 &&
+									(step.status === "running" || step.status === "pending")
 									? "border-foreground/20 bg-foreground/5"
 									: "border-border/60 bg-card/50"
-							}`}
+								}`}
 							key={step.id}
 						>
 							{getStatusIcon(step.status)}
@@ -239,7 +275,13 @@ const statusStyles: Record<string, string> = {
 	closed: "bg-secondary/40 text-muted-foreground",
 };
 
-export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
+export function TicketModal({
+	ticket,
+	open,
+	onClose,
+	onAskOpencode,
+	isAskOpencodePending,
+}: TicketModalProps) {
 	const [chatInput, setChatInput] = useState("");
 	const [opencodeChatInput, setOpencodeChatInput] = useState("");
 	const [activeTab, setActiveTab] = useState("details");
@@ -248,6 +290,24 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 	>([]);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 	const opencodeChatEndRef = useRef<HTMLDivElement>(null);
+
+	// Track the current Opencode chat session ID for this modal open
+	// When the modal opens and the Opencode tab is accessed, we create a new session
+	const [opencodeChatSessionId, setOpencodeChatSessionId] = useState<
+		string | null
+	>(null);
+	// Track if we've already requested a session for this modal open
+	const [sessionRequested, setSessionRequested] = useState(false);
+
+	// Reset session state when ticket changes
+	const ticketId = ticket?.id;
+	useEffect(() => {
+		// Reset session state when ticket changes
+		// Using ticketId to satisfy linter - we need to react to ticket changes
+		void ticketId;
+		setOpencodeChatSessionId(null);
+		setSessionRequested(false);
+	}, [ticketId]);
 
 	// Fetch full ticket data with messages
 	const ticketQuery = api.ticket.byId.useQuery(
@@ -264,17 +324,58 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 		staleTime: 30000, // Cache for 30 seconds
 	});
 
+	// Mutation to start a new Opencode session for the chat tab
+	const startSessionMutation = api.ticket.startOpencodeSession.useMutation({
+		onSuccess: (data) => {
+			setOpencodeChatSessionId(data.sessionId);
+		},
+	});
+
+	// Start a new session when Opencode tab is first accessed
+	useEffect(() => {
+		if (
+			activeTab === "opencode" &&
+			ticket?.id &&
+			open &&
+			!sessionRequested &&
+			opencodeStatusQuery.data?.available
+		) {
+			setSessionRequested(true);
+			startSessionMutation.mutate({ ticketId: ticket.id });
+		}
+	}, [
+		activeTab,
+		ticket?.id,
+		open,
+		sessionRequested,
+		opencodeStatusQuery.data?.available,
+		startSessionMutation,
+	]);
+
 	const opencodeChatQuery = api.ticket.getOpencodeChat.useQuery(
-		{ ticketId: ticket?.id ?? "" },
 		{
-			enabled: !!ticket?.id && open && activeTab === "opencode",
+			ticketId: ticket?.id ?? "",
+			sessionId: opencodeChatSessionId ?? undefined,
+		},
+		{
+			enabled:
+				!!ticket?.id &&
+				open &&
+				activeTab === "opencode" &&
+				!!opencodeChatSessionId,
 		},
 	);
 
+	// Extract messages from the new response shape
+	const opencodeData = opencodeChatQuery.data;
 	const opencodeMessages = [
-		...(opencodeChatQuery.data ?? []),
+		...(opencodeData?.messages ?? []),
 		...optimisticOpencodeMessages,
 	];
+	const currentSessionId =
+		opencodeData?.currentSessionId || opencodeChatSessionId;
+	// Track if this is a freshly created session (e.g., after server restart)
+	const _isNewOpencodeSession = opencodeData?.isNewSession ?? false;
 
 	// Mutations
 	const chatMutation = api.ticket.chat.useMutation({
@@ -325,29 +426,27 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 	>([]);
 	const lastSeenToolCountRef = useRef(0);
 
-	const askOpencodeMutation = api.ticket.askOpencode.useMutation({
-		onMutate: () => {
-			// Reset live steps when starting analysis
-			setLiveAnalysisSteps([]);
-			lastSeenToolCountRef.current = 0;
-		},
-		onSuccess: () => {
-			void ticketQuery.refetch();
-			void opencodeChatQuery.refetch();
-			// Clear live steps after a brief delay to show completion
-			setTimeout(() => setLiveAnalysisSteps([]), 500);
-		},
-		onError: () => {
-			setLiveAnalysisSteps([]);
-		},
-	});
+	// Determine if this ticket has a pending Ask Opencode run (from parent)
+	const thisTicketAskPending = ticket?.id
+		? isAskOpencodePending(ticket.id)
+		: false;
 
-	// Poll for live analysis steps when askOpencode is running
+	// Reset live steps when the analysis completes
+	useEffect(() => {
+		if (!thisTicketAskPending && liveAnalysisSteps.length > 0) {
+			// Clear live steps after a brief delay to show completion
+			const timeout = setTimeout(() => setLiveAnalysisSteps([]), 500);
+			return () => clearTimeout(timeout);
+		}
+	}, [thisTicketAskPending, liveAnalysisSteps.length]);
+
+	// Poll for live analysis steps when askOpencode is running for this ticket
 	const pollForSteps = useCallback(async () => {
-		if (!ticket?.id || !askOpencodeMutation.isPending) return;
+		// Only poll if this ticket has a pending Ask Opencode run
+		if (!thisTicketAskPending || !ticket?.id) return;
 
 		try {
-			// Fetch latest messages from the Opencode chat
+			// Fetch latest messages from the Opencode chat for this ticket
 			const response = await fetch(
 				`/api/trpc/ticket.getOpencodeChat?batch=1&input=${encodeURIComponent(
 					JSON.stringify({ "0": { json: { ticketId: ticket.id } } }),
@@ -356,10 +455,13 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 			if (!response.ok) return;
 
 			const data = await response.json();
-			const messages = data?.[0]?.result?.data?.json ?? [];
+			const messagesData =
+				data?.[0]?.result?.data?.json?.messages ??
+				data?.[0]?.result?.data?.json ??
+				[];
 
 			// Extract tool calls from the latest assistant message
-			const assistantMessages = messages.filter(
+			const assistantMessages = messagesData.filter(
 				(m: OpencodeChatMessage) => m.role === "assistant",
 			);
 			if (assistantMessages.length === 0) return;
@@ -387,18 +489,22 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 		} catch {
 			// Silently ignore polling errors
 		}
-	}, [ticket?.id, askOpencodeMutation.isPending]);
+	}, [thisTicketAskPending, ticket?.id]);
 
 	// Set up polling interval when analyzing
 	useEffect(() => {
-		if (!askOpencodeMutation.isPending) return;
+		if (!thisTicketAskPending) return;
+
+		// Reset tool count when starting a new analysis
+		lastSeenToolCountRef.current = 0;
+		setLiveAnalysisSteps([]);
 
 		// Poll immediately and then every 500ms
 		pollForSteps();
 		const interval = setInterval(pollForSteps, 500);
 
 		return () => clearInterval(interval);
-	}, [askOpencodeMutation.isPending, pollForSteps]);
+	}, [thisTicketAskPending, pollForSteps]);
 
 	// Scroll to bottom when messages change
 	useEffect(() => {
@@ -423,18 +529,18 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 	};
 
 	const handleSendOpencodeMessage = () => {
-		if (!opencodeChatInput.trim() || !ticket?.id) return;
+		if (!opencodeChatInput.trim() || !ticket?.id || !opencodeChatSessionId)
+			return;
 		sendOpencodeMutation.mutate({
 			ticketId: ticket.id,
 			message: opencodeChatInput.trim(),
+			sessionId: opencodeChatSessionId,
 		});
 	};
 
 	const handleAskOpencode = () => {
 		if (!ticket?.id) return;
-		askOpencodeMutation.mutate({
-			ticketId: ticket.id,
-		});
+		onAskOpencode(ticket.id);
 	};
 
 	const handleGenerateRecommendations = () => {
@@ -657,14 +763,12 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 						<div className="space-y-4">
 							<div className="flex flex-wrap items-center justify-end gap-2">
 								<Button
-									disabled={!opencodeAvailable || askOpencodeMutation.isPending}
+									disabled={!opencodeAvailable || thisTicketAskPending}
 									onClick={handleAskOpencode}
 									size="sm"
 									variant="outline"
 								>
-									{askOpencodeMutation.isPending
-										? "Analyzing..."
-										: "Ask Opencode"}
+									{thisTicketAskPending ? "Analyzing..." : "Ask Opencode"}
 									{!opencodeAvailable && (
 										<span className="ml-1 text-muted-foreground text-xs">
 											(unavailable)
@@ -689,7 +793,7 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 									<Skeleton className="h-4 w-3/4" />
 									<Skeleton className="h-4 w-5/6" />
 								</div>
-							) : askOpencodeMutation.isPending ? (
+							) : thisTicketAskPending ? (
 								<LiveAnalysisProgress steps={liveAnalysisSteps} />
 							) : latestRecommendation ? (
 								<div className="space-y-6">
@@ -779,11 +883,10 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 												key={msg.id}
 											>
 												<div
-													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${
-														msg.role === "user"
+													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${msg.role === "user"
 															? "bg-foreground text-background"
 															: "border border-border/60 bg-card/50"
-													}`}
+														}`}
 												>
 													<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
 														<Markdown>{msg.content}</Markdown>
@@ -871,11 +974,36 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 									{/* Opencode chat messages */}
 									<ScrollArea className="min-h-0 flex-1">
 										<div className="space-y-3 pr-4">
-											{opencodeChatQuery.isLoading ? (
+											{startSessionMutation.isPending ||
+												opencodeChatQuery.isLoading ? (
 												<div className="space-y-3">
-													<Skeleton className="h-12 w-3/4" />
-													<Skeleton className="ml-auto h-8 w-1/2" />
-													<Skeleton className="h-16 w-4/5" />
+													<div className="flex items-center gap-2">
+														<svg
+															aria-hidden="true"
+															className="h-4 w-4 animate-spin text-muted-foreground"
+															fill="none"
+															viewBox="0 0 24 24"
+														>
+															<circle
+																className="opacity-25"
+																cx="12"
+																cy="12"
+																r="10"
+																stroke="currentColor"
+																strokeWidth="4"
+															/>
+															<path
+																className="opacity-75"
+																d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+																fill="currentColor"
+															/>
+														</svg>
+														<span className="text-muted-foreground text-sm">
+															{startSessionMutation.isPending
+																? "Creating new session..."
+																: "Loading messages..."}
+														</span>
+													</div>
 												</div>
 											) : opencodeMessages.length === 0 ? (
 												<div className="flex flex-col items-center justify-center py-12 text-center">
@@ -887,7 +1015,7 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 													</p>
 												</div>
 											) : (
-												opencodeMessages.map((msg) => {
+												opencodeMessages.map((msg, index) => {
 													const isUser = msg.role === "user";
 													const toolParts =
 														msg.parts?.filter(
@@ -906,59 +1034,76 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 															.join("\n")
 															.trim();
 
+													// Detect session boundary (sessionId changed from previous message)
+													const prevMessage =
+														index > 0 ? opencodeMessages[index - 1] : null;
+													const showSessionBoundary =
+														msg.sessionId &&
+														prevMessage?.sessionId &&
+														msg.sessionId !== prevMessage.sessionId;
+
+													// Check if this message is from a legacy session (different from current)
+													const isLegacySession =
+														currentSessionId &&
+														msg.sessionId &&
+														msg.sessionId !== currentSessionId;
+
 													return (
-														<div
-															className={`flex ${isUser ? "justify-end" : "justify-start"}`}
-															key={msg.id}
-														>
+														<div key={msg.id}>
+															{/* Session boundary separator */}
+															{showSessionBoundary && <SessionBoundary />}
+
 															<div
-																className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${
-																	isUser
-																		? "bg-foreground text-background"
-																		: "border border-border/60 bg-card/50"
-																}`}
+																className={`flex ${isUser ? "justify-end" : "justify-start"}`}
 															>
-																{/* Reasoning section (collapsible) for assistant messages */}
-																{!isUser && hasReasoning && (
-																	<OpencodeReasoningDisplay
-																		reasoning={reasoningText}
-																	/>
-																)}
-
-																{/* Tool calls (for assistant messages) */}
-																{!isUser && toolParts.length > 0 && (
-																	<div className="mb-3">
-																		{toolParts.map((tool) => (
-																			<OpencodeToolCallDisplay
-																				key={tool.id}
-																				tool={tool}
-																			/>
-																		))}
-																	</div>
-																)}
-
-																{/* Text content */}
-																{msg.text && (
-																	<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
-																		<Markdown>{msg.text}</Markdown>
-																	</div>
-																)}
-
-																{/* Timestamp and model badge */}
-																<div className="mt-1 flex items-center gap-2 text-xs tabular-nums opacity-50">
-																	<span>
-																		{new Date(
-																			msg.createdAt,
-																		).toLocaleTimeString()}
-																	</span>
-																	{msg.model && (
-																		<Badge
-																			className="h-4 px-1 font-normal text-[10px]"
-																			variant="outline"
-																		>
-																			{msg.model}
-																		</Badge>
+																<div
+																	className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${isUser
+																			? "bg-foreground text-background"
+																			: "border border-border/60 bg-card/50"
+																		} ${isLegacySession ? "opacity-60" : ""}`}
+																>
+																	{/* Reasoning section (collapsible) for assistant messages */}
+																	{!isUser && hasReasoning && (
+																		<OpencodeReasoningDisplay
+																			reasoning={reasoningText}
+																		/>
 																	)}
+
+																	{/* Tool calls (for assistant messages) */}
+																	{!isUser && toolParts.length > 0 && (
+																		<div className="mb-3">
+																			{toolParts.map((tool) => (
+																				<OpencodeToolCallDisplay
+																					key={tool.id}
+																					tool={tool}
+																				/>
+																			))}
+																		</div>
+																	)}
+
+																	{/* Text content */}
+																	{msg.text && (
+																		<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
+																			<Markdown>{msg.text}</Markdown>
+																		</div>
+																	)}
+
+																	{/* Timestamp and model badge */}
+																	<div className="mt-1 flex items-center gap-2 text-xs tabular-nums opacity-50">
+																		<span>
+																			{new Date(
+																				msg.createdAt,
+																			).toLocaleTimeString()}
+																		</span>
+																		{msg.model && (
+																			<Badge
+																				className="h-4 px-1 font-normal text-[10px]"
+																				variant="outline"
+																			>
+																				{msg.model}
+																			</Badge>
+																		)}
+																	</div>
 																</div>
 															</div>
 														</div>
@@ -985,7 +1130,11 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 										<div className="flex gap-2">
 											<Textarea
 												className="min-h-[44px] resize-none text-sm"
-												disabled={sendOpencodeMutation.isPending}
+												disabled={
+													sendOpencodeMutation.isPending ||
+													startSessionMutation.isPending ||
+													!opencodeChatSessionId
+												}
 												onChange={(e) => setOpencodeChatInput(e.target.value)}
 												onKeyDown={(e) => {
 													if (e.key === "Enter" && !e.shiftKey) {
@@ -993,14 +1142,19 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 														handleSendOpencodeMessage();
 													}
 												}}
-												placeholder="Ask Opencode about this ticket..."
+												placeholder={
+													startSessionMutation.isPending
+														? "Starting session..."
+														: "Ask Opencode about this ticket..."
+												}
 												value={opencodeChatInput}
 											/>
 											<Button
 												className="h-auto px-4"
 												disabled={
 													!opencodeChatInput.trim() ||
-													sendOpencodeMutation.isPending
+													sendOpencodeMutation.isPending ||
+													!opencodeChatSessionId
 												}
 												onClick={handleSendOpencodeMessage}
 											>

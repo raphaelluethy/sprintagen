@@ -184,6 +184,8 @@ export interface OpencodeChatMessage {
 	parts?: MessagePart[];
 	// Reasoning text if available
 	reasoning?: string;
+	// Session ID this message belongs to - used for session boundary detection
+	sessionId?: string;
 }
 
 /**
@@ -221,14 +223,77 @@ export async function checkOpencodeHealth(): Promise<boolean> {
 }
 
 /**
- * Get or create an Opencode session for a ticket
+ * Check if an Opencode session exists
+ * Returns true if session exists, false if it doesn't
+ * Assumes Opencode server is healthy (caller should check health separately if needed)
  */
-export async function getOrCreateOpencodeSession(
-	ticketId: string,
-	ticketTitle: string,
-): Promise<OpencodeResult<string>> {
+async function sessionExists(sessionId: string): Promise<boolean> {
 	try {
-		// Get ticket to check for existing session
+		const response = await fetchFromOpencode(`/session/${sessionId}/message`, {
+			method: "GET",
+			headers: { "Content-Type": "application/json" },
+		});
+
+		// Session doesn't exist
+		if (response.status === 404 || response.status === 410) {
+			console.log(`[OPENCODE] Session ${sessionId} not found`);
+			return false;
+		}
+
+		// Check for error responses that indicate session doesn't exist
+		if (response.ok) {
+			const data = await response.json();
+			if (
+				data.error ||
+				(data.data?.message &&
+					typeof data.data.message === "string" &&
+					data.data.message.toLowerCase().includes("not found"))
+			) {
+				console.log(
+					`[OPENCODE] Session ${sessionId} not found (error in response)`,
+				);
+				return false;
+			}
+		}
+
+		return response.ok;
+	} catch (error) {
+		// Any error fetching the session means it doesn't exist (or is inaccessible)
+		const message = error instanceof Error ? error.message : String(error);
+		console.log(`[OPENCODE] Session ${sessionId} not found (${message})`);
+		return false;
+	}
+}
+
+/**
+ * Clear stale session ID from ticket metadata
+ */
+async function clearStaleSessionId(ticketId: string): Promise<void> {
+	const ticket = await db.query.tickets.findFirst({
+		where: eq(tickets.id, ticketId),
+	});
+
+	if (!ticket) return;
+
+	const metadata = (ticket.metadata ?? {}) as TicketMetadata;
+	const { opencodeSessionId: _, ...rest } = metadata;
+
+	await db
+		.update(tickets)
+		.set({ metadata: rest })
+		.where(eq(tickets.id, ticketId));
+
+	console.log(`[OPENCODE] Cleared stale session ID for ticket ${ticketId}`);
+}
+
+/**
+ * Pure lookup helper: returns the current valid opencodeSessionId from ticket metadata
+ * or null if there is no valid session. Never creates a new session.
+ */
+export async function lookupExistingOpencodeSession(
+	ticketId: string,
+): Promise<OpencodeResult<{ sessionId: string | null }>> {
+	try {
 		const ticket = await db.query.tickets.findFirst({
 			where: eq(tickets.id, ticketId),
 		});
@@ -239,12 +304,58 @@ export async function getOrCreateOpencodeSession(
 
 		const metadata = (ticket.metadata ?? {}) as TicketMetadata;
 
-		// If session already exists, return it
-		if (metadata.opencodeSessionId) {
-			return { success: true, data: metadata.opencodeSessionId };
+		// No stored session ID
+		if (!metadata.opencodeSessionId) {
+			return { success: true, data: { sessionId: null } };
 		}
 
+		// Validate the session exists
+		const exists = await sessionExists(metadata.opencodeSessionId);
+
+		if (exists) {
+			console.log(
+				`[OPENCODE] Lookup found valid session ${metadata.opencodeSessionId} for ticket ${ticketId}`,
+			);
+			return { success: true, data: { sessionId: metadata.opencodeSessionId } };
+		}
+
+		// Session is stale - clear it and return null
+		console.log(
+			`[OPENCODE] Lookup found stale session ${metadata.opencodeSessionId} for ticket ${ticketId}, clearing`,
+		);
+		await clearStaleSessionId(ticketId);
+		return { success: true, data: { sessionId: null } };
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Unknown error occurred";
+		return { success: false, error: message };
+	}
+}
+
+/**
+ * Always create a fresh Opencode session for a ticket, overwriting any previous session ID.
+ * Returns the new session ID.
+ */
+export async function createNewOpencodeSessionForTicket(
+	ticketId: string,
+	ticketTitle: string,
+): Promise<OpencodeResult<{ sessionId: string }>> {
+	try {
+		const ticket = await db.query.tickets.findFirst({
+			where: eq(tickets.id, ticketId),
+		});
+
+		if (!ticket) {
+			return { success: false, error: "Ticket not found" };
+		}
+
+		const metadata = (ticket.metadata ?? {}) as TicketMetadata;
+		const oldSessionId = metadata.opencodeSessionId;
+
 		// Create a new session
+		console.log(
+			`[OPENCODE] Creating fresh session for ticket ${ticketId}${oldSessionId ? ` (replacing ${oldSessionId})` : ""}`,
+		);
 		const response = await fetchFromOpencode("/session", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -263,8 +374,8 @@ export async function getOrCreateOpencodeSession(
 
 		const session = (await response.json()) as OpencodeSession;
 
-		// Persist the session ID to the ticket's metadata
-		await db
+		// Persist the new session ID to the ticket's metadata (overwriting old)
+		const [updatedTicket] = await db
 			.update(tickets)
 			.set({
 				metadata: {
@@ -272,9 +383,116 @@ export async function getOrCreateOpencodeSession(
 					opencodeSessionId: session.id,
 				},
 			})
-			.where(eq(tickets.id, ticketId));
+			.where(eq(tickets.id, ticketId))
+			.returning();
 
-		return { success: true, data: session.id };
+		if (!updatedTicket) {
+			console.warn(
+				`[OPENCODE] Created session ${session.id} but failed to persist to ticket ${ticketId}`,
+			);
+		}
+
+		console.log(
+			`[OPENCODE] Created fresh session ${session.id} for ticket ${ticketId}`,
+		);
+		return { success: true, data: { sessionId: session.id } };
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Unknown error occurred";
+		return { success: false, error: message };
+	}
+}
+
+/**
+ * Get or create an Opencode session for a ticket
+ * Validates existing sessions and recreates them if they're stale (e.g., after Opencode restart)
+ */
+export async function getOrCreateOpencodeSession(
+	ticketId: string,
+	ticketTitle: string,
+): Promise<OpencodeResult<{ sessionId: string; isNew: boolean }>> {
+	try {
+		// Get ticket to check for existing session
+		const ticket = await db.query.tickets.findFirst({
+			where: eq(tickets.id, ticketId),
+		});
+
+		if (!ticket) {
+			return { success: false, error: "Ticket not found" };
+		}
+
+		let metadata = (ticket.metadata ?? {}) as TicketMetadata;
+
+		// If we have a stored session ID, check if it still exists
+		if (metadata.opencodeSessionId) {
+			const exists = await sessionExists(metadata.opencodeSessionId);
+
+			if (exists) {
+				console.log(
+					`[OPENCODE] Reusing session ${metadata.opencodeSessionId} for ticket ${ticketId}`,
+				);
+				return {
+					success: true,
+					data: { sessionId: metadata.opencodeSessionId, isNew: false },
+				};
+			}
+
+			// Session doesn't exist - clear the stored ID and create a new one
+			console.log(
+				`[OPENCODE] Session ${metadata.opencodeSessionId} doesn't exist, creating new session for ticket ${ticketId}`,
+			);
+			await clearStaleSessionId(ticketId);
+
+			// Re-fetch metadata after clearing
+			const updatedTicket = await db.query.tickets.findFirst({
+				where: eq(tickets.id, ticketId),
+			});
+			metadata = (updatedTicket?.metadata ?? {}) as TicketMetadata;
+		}
+
+		// Create a new session
+		console.log(`[OPENCODE] Creating new session for ticket ${ticketId}`);
+		const response = await fetchFromOpencode("/session", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				title: `Ticket: ${ticketTitle} (${ticketId})`,
+			}),
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			return {
+				success: false,
+				error: `Failed to create Opencode session: ${errorText}`,
+			};
+		}
+
+		const session = (await response.json()) as OpencodeSession;
+
+		// Persist the session ID to the ticket's metadata atomically
+		const [updatedTicket] = await db
+			.update(tickets)
+			.set({
+				metadata: {
+					...metadata,
+					opencodeSessionId: session.id,
+				},
+			})
+			.where(eq(tickets.id, ticketId))
+			.returning();
+
+		if (!updatedTicket) {
+			// Fallback - session was created but metadata update failed
+			console.warn(
+				`[OPENCODE] Created session ${session.id} but failed to persist to ticket ${ticketId}`,
+			);
+		}
+
+		console.log(
+			`[OPENCODE] Created new session ${session.id} for ticket ${ticketId}`,
+		);
+		return { success: true, data: { sessionId: session.id, isNew: true } };
 	} catch (error) {
 		const message =
 			error instanceof Error ? error.message : "Unknown error occurred";
@@ -339,23 +557,55 @@ function mapToOpencodeChatMessage(
 		parts: parts.length > 0 ? parts : undefined,
 		// Include reasoning if available
 		reasoning: reasoning || undefined,
+		// Include session ID for session boundary detection
+		sessionId: msg.info.sessionID,
 	};
 }
 
 /**
- * Get chat messages for a ticket's Opencode session
+ * Result type for getOpencodeMessages that includes session info
+ */
+export interface OpencodeMessagesResult {
+	messages: OpencodeChatMessage[];
+	currentSessionId: string;
+	isNewSession: boolean;
+}
+
+/**
+ * Get chat messages for a ticket's Opencode session.
+ * Uses lookup-only behavior: if there is no valid session, returns empty messages
+ * without creating a new session. This prevents implicit session creation on read.
+ *
+ * Optionally accepts an explicit sessionId to fetch messages from a specific session
+ * (used when the UI holds a session ID in local state).
  */
 export async function getOpencodeMessages(
 	ticketId: string,
-	ticketTitle: string,
-): Promise<OpencodeResult<OpencodeChatMessage[]>> {
-	// Ensure session exists
-	const sessionResult = await getOrCreateOpencodeSession(ticketId, ticketTitle);
-	if (!sessionResult.success) {
-		return sessionResult;
+	_ticketTitle: string,
+	explicitSessionId?: string,
+): Promise<OpencodeResult<OpencodeMessagesResult>> {
+	let sessionId: string | null = explicitSessionId ?? null;
+
+	// If no explicit session provided, look up from ticket metadata (read-only)
+	if (!sessionId) {
+		const lookupResult = await lookupExistingOpencodeSession(ticketId);
+		if (!lookupResult.success) {
+			return lookupResult;
+		}
+		sessionId = lookupResult.data.sessionId;
 	}
 
-	const sessionId = sessionResult.data;
+	// No valid session - return empty messages without creating one
+	if (!sessionId) {
+		return {
+			success: true,
+			data: {
+				messages: [],
+				currentSessionId: "",
+				isNewSession: false,
+			},
+		};
+	}
 
 	try {
 		const response = await fetchFromOpencode(`/session/${sessionId}/message`, {
@@ -402,7 +652,14 @@ export async function getOpencodeMessages(
 			.map(mapToOpencodeChatMessage)
 			.filter((msg): msg is OpencodeChatMessage => msg !== null);
 
-		return { success: true, data: mapped };
+		return {
+			success: true,
+			data: {
+				messages: mapped,
+				currentSessionId: sessionId,
+				isNewSession: false,
+			},
+		};
 	} catch (error) {
 		const message =
 			error instanceof Error ? error.message : "Unknown error occurred";
@@ -411,20 +668,47 @@ export async function getOpencodeMessages(
 }
 
 /**
- * Send a message to a ticket's Opencode session
+ * Result type for sendOpencodeMessage that includes session info
+ */
+export interface OpencodeMessageResult {
+	message: OpencodeChatMessage;
+	sessionId: string;
+	isNewSession: boolean;
+}
+
+/**
+ * Send a message to a ticket's Opencode session.
+ * Optionally accepts an explicit sessionId - when provided, sends into that session
+ * without consulting/updating ticket metadata.
+ * When not provided, falls back to getOrCreateOpencodeSession for legacy flows.
  */
 export async function sendOpencodeMessage(
 	ticketId: string,
 	ticketTitle: string,
 	userMessage: string,
-): Promise<OpencodeResult<OpencodeChatMessage>> {
-	// Ensure session exists
-	const sessionResult = await getOrCreateOpencodeSession(ticketId, ticketTitle);
-	if (!sessionResult.success) {
-		return sessionResult;
-	}
+	explicitSessionId?: string,
+): Promise<OpencodeResult<OpencodeMessageResult>> {
+	let sessionId: string;
+	let isNew = false;
 
-	const sessionId = sessionResult.data;
+	if (explicitSessionId) {
+		// Use the explicit session ID directly (UI-managed session)
+		sessionId = explicitSessionId;
+		console.log(
+			`[OPENCODE] Sending message to explicit session ${sessionId} for ticket ${ticketId}`,
+		);
+	} else {
+		// Legacy flow: ensure session exists via getOrCreateOpencodeSession
+		const sessionResult = await getOrCreateOpencodeSession(
+			ticketId,
+			ticketTitle,
+		);
+		if (!sessionResult.success) {
+			return sessionResult;
+		}
+		sessionId = sessionResult.data.sessionId;
+		isNew = sessionResult.data.isNew;
+	}
 
 	try {
 		// Build the message payload
@@ -505,7 +789,11 @@ export async function sendOpencodeMessage(
 
 		return {
 			success: true,
-			data: mapped,
+			data: {
+				message: mapped,
+				sessionId,
+				isNewSession: isNew,
+			},
 		};
 	} catch (error) {
 		const message =
@@ -515,18 +803,53 @@ export async function sendOpencodeMessage(
 }
 
 /**
- * Send a prompt to Opencode and extract plain text response
+ * Result type for askOpencodeQuestion that includes session info
+ */
+export interface OpencodeQuestionResult {
+	answer: string;
+	sessionId: string;
+	isNewSession: boolean;
+}
+
+/**
+ * Send a prompt to Opencode and extract plain text response.
+ * ALWAYS creates a fresh session for each call - each "Ask Opencode" click
+ * starts a brand new Opencode run, even for the same ticket.
  */
 export async function askOpencodeQuestion(
 	ticketId: string,
 	ticketTitle: string,
 	prompt: string,
-): Promise<OpencodeResult<string>> {
-	const result = await sendOpencodeMessage(ticketId, ticketTitle, prompt);
+): Promise<OpencodeResult<OpencodeQuestionResult>> {
+	// Always create a fresh session for each Ask Opencode call
+	const sessionResult = await createNewOpencodeSessionForTicket(
+		ticketId,
+		ticketTitle,
+	);
+	if (!sessionResult.success) {
+		return sessionResult;
+	}
+
+	const { sessionId } = sessionResult.data;
+
+	// Send the message into the fresh session
+	const result = await sendOpencodeMessage(
+		ticketId,
+		ticketTitle,
+		prompt,
+		sessionId,
+	);
 
 	if (!result.success) {
 		return result;
 	}
 
-	return { success: true, data: result.data.text };
+	return {
+		success: true,
+		data: {
+			answer: result.data.message.text,
+			sessionId: result.data.sessionId,
+			isNewSession: true, // Always true since we always create fresh
+		},
+	};
 }
