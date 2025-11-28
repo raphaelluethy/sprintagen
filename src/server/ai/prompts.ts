@@ -60,7 +60,7 @@ export function buildRecommendedStepsPrompt(ticket: Ticket): {
 	user: string;
 } {
 	const system = dedent`
-    You are an expert software developer helping to break down tickets into actionable steps.
+    You are an expert software development advisor helping to break down tickets into actionable steps.
     Analyze the ticket and provide clear, specific implementation steps.
     Consider best practices, potential edge cases, and testing requirements.
     Format your response as a numbered list of steps.
@@ -222,6 +222,7 @@ export function buildRepoContextPrompt(
     Please identify:
     1. Which files/components are likely affected
     2. Potential implementation approach
+    3. Recommend a programmer for the ticket that has touched the files that are most likely to be affected most recently
     3. Any risks or considerations
   `;
 

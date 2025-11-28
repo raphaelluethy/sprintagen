@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { env } from "@/env";
 import { fetchFromOpencode } from "@/lib/opencode";
 import { db } from "@/server/db";
 import { tickets } from "@/server/db/schema";
@@ -209,6 +210,10 @@ export async function checkOpencodeHealth(): Promise<boolean> {
 			method: "GET",
 			headers: { "Content-Type": "application/json" },
 		});
+		console.log("[OPENCODE] Health check response:", response);
+		if (env.FAST_MODE) {
+			console.log("[OPENCODE] Fast mode is enabled");
+		}
 		return response.ok;
 	} catch {
 		return false;
@@ -412,11 +417,6 @@ export async function sendOpencodeMessage(
 	ticketId: string,
 	ticketTitle: string,
 	userMessage: string,
-	options?: {
-		agent?: string;
-		providerID?: string;
-		modelID?: string;
-	},
 ): Promise<OpencodeResult<OpencodeChatMessage>> {
 	// Ensure session exists
 	const sessionResult = await getOrCreateOpencodeSession(ticketId, ticketTitle);
@@ -433,20 +433,16 @@ export async function sendOpencodeMessage(
 			model?: { providerID: string; modelID: string };
 			parts: { type: "text"; text: string }[];
 		} = {
+			agent: "docs-agent",
 			parts: [{ type: "text", text: userMessage }],
 		};
 
-		// Use provided agent or default to docs-agent
-		if (options?.agent) {
-			payload.agent = options.agent;
-		}
-
 		// Use provided model if both providerID and modelID are set,
 		// otherwise default to big-pickle for ticket flows
-		if (options?.providerID && options?.modelID) {
+		if (env.FAST_MODE) {
 			payload.model = {
-				providerID: options.providerID,
-				modelID: options.modelID,
+				providerID: "cerebras",
+				modelID: "zai-glm-4.6",
 			};
 		} else {
 			// Default to big-pickle for ticket Opencode calls
@@ -525,18 +521,8 @@ export async function askOpencodeQuestion(
 	ticketId: string,
 	ticketTitle: string,
 	prompt: string,
-	options?: {
-		agent?: string;
-		providerID?: string;
-		modelID?: string;
-	},
 ): Promise<OpencodeResult<string>> {
-	const result = await sendOpencodeMessage(
-		ticketId,
-		ticketTitle,
-		prompt,
-		options,
-	);
+	const result = await sendOpencodeMessage(ticketId, ticketTitle, prompt);
 
 	if (!result.success) {
 		return result;

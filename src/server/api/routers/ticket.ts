@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import dedent from "dedent";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -658,29 +659,43 @@ export const ticketRouter = createTRPCRouter({
 			// Build the prompt with ticket context
 			const latestRanking = ticket.rankings?.[0];
 			const rankingContext = latestRanking
-				? `\n\nAI Analysis:\n- Urgency: ${latestRanking.urgencyScore}/10\n- Impact: ${latestRanking.impactScore}/10\n- Complexity: ${latestRanking.complexityScore}/10\n- Overall Score: ${latestRanking.overallScore}/10\n- Reasoning: ${latestRanking.reasoning ?? "N/A"}`
+				? dedent(`
+					\n\nAI Analysis:
+					- Urgency: ${latestRanking.urgencyScore}/10
+					- Impact: ${latestRanking.impactScore}/10
+					- Complexity: ${latestRanking.complexityScore}/10
+					- Overall Score: ${latestRanking.overallScore}/10
+					- Reasoning: ${latestRanking.reasoning ?? "N/A"}
+				`)
 				: "";
 
-			const defaultQuestion = `Please analyze this ticket and provide:
-1. A high-level implementation plan with key steps
-2. Which files/modules in the codebase are most likely to be affected
-3. If possible, identify who last touched the relevant files using git history
+			const defaultQuestion = dedent(`
+				Please analyze this ticket and provide:
+				1. A high-level implementation plan with key steps
+				2. Which files/modules in the codebase are most likely to be affected
+				3. Recommend a programmer for the ticket that has touched the files that are most likely to be affected most recently using git history
+				4. Any risks or considerations
 
-Be concise but thorough.`;
+				Be concise but thorough.
+			`);
 
-			const prompt = `Ticket: ${ticket.title}
-Provider: ${ticket.provider}
-Status: ${ticket.status}
-Priority: ${ticket.priority ?? "medium"}
-Labels: ${(ticket.labels ?? []).join(", ") || "none"}
-${rankingContext}
+			const prompt = dedent(`
+				Ticket: ${ticket.title}
+				Provider: ${ticket.provider}
+				Status: ${ticket.status}
+				Priority: ${ticket.priority ?? "medium"}
+				Labels: ${(ticket.labels ?? []).join(", ") || "none"}
+				${rankingContext}
 
-Description:
-${ticket.description ?? "No description provided."}
+				Description:
+				${ticket.description ?? "No description provided."}
 
----
+				---
 
-${input.question ?? defaultQuestion}`;
+				${input.question ?? defaultQuestion}
+			`);
+
+			console.log("[OPENCODE] Prompt:", prompt);
 
 			// Send to Opencode
 			const result = await askOpencodeQuestion(

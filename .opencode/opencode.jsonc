@@ -1,0 +1,5 @@
+{
+	"$schema": "https://opencode.ai/config.json",
+	// Use Cerebras as the default provider with zai-glm-4.6 model
+	"model": "cerebras/zai-glm-4.6"
+}

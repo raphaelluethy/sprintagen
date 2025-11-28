@@ -1,0 +1,19 @@
+{
+	"$schema": "https://opencode.ai/config.json",
+	// Use Cerebras as the default provider with zai-glm-4.6 model
+	"model": "cerebras/zai-glm-4.6",
+	// Configure agents - docs-agent is defined in agent/docs-agent.md
+	"agent": {
+		"docs-agent": {
+			"mode": "primary"
+		}
+	},
+	// Configure Cerebras provider with API key from environment
+	"provider": {
+		"cerebras": {
+			"options": {
+				"apiKey": "{env:CEREBRAS_API_KEY}"
+			}
+		}
+	}
+}

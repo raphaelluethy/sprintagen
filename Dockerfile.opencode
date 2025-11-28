@@ -15,8 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install opencode CLI globally
 RUN bun install -g opencode-ai
 
-# Copy opencode agent configuration
+# Copy opencode configuration (global config + agents)
 RUN mkdir -p /root/.config/opencode/agent
+COPY opencode/opencode.jsonc /root/.config/opencode/opencode.jsonc
 COPY opencode/agent/docs-agent.md /root/.config/opencode/agent/docs-agent.md
 
 # Copy entrypoint script

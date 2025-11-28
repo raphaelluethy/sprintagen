@@ -200,11 +200,12 @@ function LiveAnalysisProgress({
 				<div className="space-y-1.5">
 					{steps.map((step, index) => (
 						<div
-							className={`flex items-center gap-2 rounded-md border px-3 py-2 transition-all ${index === steps.length - 1 &&
-									(step.status === "running" || step.status === "pending")
+							className={`flex items-center gap-2 rounded-md border px-3 py-2 transition-all ${
+								index === steps.length - 1 &&
+								(step.status === "running" || step.status === "pending")
 									? "border-foreground/20 bg-foreground/5"
 									: "border-border/60 bg-card/50"
-								}`}
+							}`}
 							key={step.id}
 						>
 							{getStatusIcon(step.status)}
@@ -778,10 +779,11 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 												key={msg.id}
 											>
 												<div
-													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${msg.role === "user"
+													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${
+														msg.role === "user"
 															? "bg-foreground text-background"
 															: "border border-border/60 bg-card/50"
-														}`}
+													}`}
 												>
 													<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
 														<Markdown>{msg.content}</Markdown>
@@ -910,10 +912,11 @@ export function TicketModal({ ticket, open, onClose }: TicketModalProps) {
 															key={msg.id}
 														>
 															<div
-																className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${isUser
+																className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${
+																	isUser
 																		? "bg-foreground text-background"
 																		: "border border-border/60 bg-card/50"
-																	}`}
+																}`}
 															>
 																{/* Reasoning section (collapsible) for assistant messages */}
 																{!isUser && hasReasoning && (

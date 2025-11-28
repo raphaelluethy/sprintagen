@@ -3,17 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { env } from "@/env";
 
 interface Session {
 	id: string;
@@ -221,18 +214,6 @@ interface OpencodeMessage {
 	parts: MessagePart[];
 }
 
-interface Provider {
-	id: string;
-	name: string;
-	models?: { id: string; name: string }[];
-}
-
-interface Agent {
-	name: string;
-	description?: string;
-	mode?: string;
-	builtIn?: boolean;
-}
 
 // Debug logger with styled output
 const DEBUG = process.env.NODE_ENV === "development";
@@ -398,11 +379,10 @@ function ToolCallDisplay({ tool }: { tool: ToolPart }) {
 								{tool.state.status === "error" ? "Error" : "Output"}
 							</span>
 							<pre
-								className={`mt-1 max-h-64 overflow-x-auto overflow-y-auto rounded bg-secondary/50 p-2 text-xs ${
-									tool.state.status === "error"
-										? "text-destructive"
-										: "text-foreground/80"
-								}`}
+								className={`mt-1 max-h-64 overflow-x-auto overflow-y-auto rounded bg-secondary/50 p-2 text-xs ${tool.state.status === "error"
+									? "text-destructive"
+									: "text-foreground/80"
+									}`}
 							>
 								{preview || output.slice(0, 1000)}
 								{output.length > 1000 && !preview && "..."}
@@ -458,11 +438,10 @@ function MessageDisplay({ message }: { message: OpencodeMessage }) {
 	return (
 		<div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
 			<div
-				className={`max-w-[85%] rounded-lg px-4 py-3 ${
-					isUser
-						? "bg-foreground text-background"
-						: "border border-border/60 bg-card/50 text-foreground"
-				}`}
+				className={`max-w-[85%] rounded-lg px-4 py-3 ${isUser
+					? "bg-foreground text-background"
+					: "border border-border/60 bg-card/50 text-foreground"
+					}`}
 			>
 				{/* Role & Model badge for assistant */}
 				{isAssistantMessage(message.info) && (
@@ -593,11 +572,12 @@ export default function AdminChatsPage() {
 		"checking" | "healthy" | "unhealthy"
 	>("checking");
 	const [authStatus, setAuthStatus] = useState<string | null>(null);
-	const [providers, setProviders] = useState<Provider[]>([]);
-	const [selectedProvider, setSelectedProvider] = useState<string>("opencode");
-	const [selectedModel, setSelectedModel] = useState<string>("big-pickle");
-	const [agents, setAgents] = useState<Agent[]>([]);
-	const [selectedAgent, setSelectedAgent] = useState<string>("docs-agent");
+
+	// Derive provider/model based on FAST_MODE
+	const fastMode = env.NEXT_PUBLIC_FAST_MODE;
+	const selectedModelConfig = fastMode
+		? { providerID: "cerebras", modelID: "zai-glm-4.6" }
+		: { providerID: "opencode", modelID: "big-pickle" };
 
 	// Check health and configure auth on mount
 	useEffect(() => {
@@ -636,7 +616,6 @@ export default function AdminChatsPage() {
 								`Authenticated with provider: ${authData.providerId}`,
 							);
 							setAuthStatus(`Authenticated: ${authData.providerId}`);
-							setSelectedProvider(authData.providerId);
 						} else if (authData.error) {
 							log.warn(`Auth error: ${authData.error}`);
 							setAuthStatus(`Auth error: ${authData.error}`);
@@ -645,43 +624,6 @@ export default function AdminChatsPage() {
 						}
 					} else {
 						log.warn(`Auth fetch failed: ${authRes.status}`);
-					}
-
-					// Fetch providers
-					log.info("Fetching providers...");
-					const providersRes = await fetch("/api/opencode/providers");
-					if (providersRes.ok) {
-						const providersData = await providersRes.json();
-						log.debug("Providers response", providersData);
-						if (Array.isArray(providersData)) {
-							log.success(`Loaded ${providersData.length} providers`);
-							setProviders(providersData);
-						}
-					} else {
-						log.warn(`Providers fetch failed: ${providersRes.status}`);
-					}
-
-					// Fetch agents
-					log.info("Fetching agents...");
-					const agentsRes = await fetch("/api/opencode/agents");
-					if (agentsRes.ok) {
-						const agentsData = await agentsRes.json();
-						log.debug("Agents response", agentsData);
-						if (Array.isArray(agentsData)) {
-							log.success(`Loaded ${agentsData.length} agents`);
-							setAgents(agentsData);
-							// Ensure docs-agent is selected if it exists, otherwise use first agent
-							const docsAgent = agentsData.find(
-								(a: Agent) => a.name === "docs-agent",
-							);
-							if (docsAgent) {
-								setSelectedAgent("docs-agent");
-							} else if (agentsData.length > 0) {
-								setSelectedAgent(agentsData[0].name);
-							}
-						}
-					} else {
-						log.warn(`Agents fetch failed: ${agentsRes.status}`);
 					}
 				} else {
 					log.warn(
@@ -795,29 +737,26 @@ export default function AdminChatsPage() {
 
 	// Send message
 	const sendMessage = async () => {
-		if (!selectedSessionId || !newMessage.trim() || !selectedAgent) return;
+		if (!selectedSessionId || !newMessage.trim()) return;
 
 		const messageText = newMessage.trim();
 		log.info(`Sending message to session ${selectedSessionId.slice(0, 8)}...`);
 
 		// Construct PromptInput payload according to Opencode API spec
 		const payload = {
-			agent: selectedAgent,
-			model: {
-				providerID: selectedProvider,
-				modelID: selectedModel,
-			},
 			parts: [
 				{
 					type: "text",
 					text: messageText,
 				},
 			],
+			model: {
+				providerID: selectedModelConfig.providerID,
+				modelID: selectedModelConfig.modelID,
+			},
 		};
-
+		console.log("[OPENCODE] Message payload", payload);
 		log.debug("Message payload", {
-			agent: payload.agent,
-			model: payload.model,
 			text: messageText.slice(0, 100) + (messageText.length > 100 ? "..." : ""),
 		});
 
@@ -894,14 +833,19 @@ export default function AdminChatsPage() {
 						<span className="text-muted-foreground text-xs">{authStatus}</span>
 					)}
 					<div className="flex items-center gap-2">
+						<span className="text-muted-foreground text-xs">
+							Fast mode: {fastMode ? "ON" : "OFF"} • Model:{" "}
+							{selectedModelConfig.providerID}/{selectedModelConfig.modelID}
+						</span>
+					</div>
+					<div className="flex items-center gap-2">
 						<div
-							className={`h-2 w-2 rounded-full ${
-								healthStatus === "healthy"
-									? "bg-foreground"
-									: healthStatus === "unhealthy"
-										? "bg-destructive"
-										: "animate-pulse bg-muted-foreground"
-							}`}
+							className={`h-2 w-2 rounded-full ${healthStatus === "healthy"
+								? "bg-foreground"
+								: healthStatus === "unhealthy"
+									? "bg-destructive"
+									: "animate-pulse bg-muted-foreground"
+								}`}
 						/>
 						<span className="text-muted-foreground text-xs">
 							{healthStatus === "checking"
@@ -945,11 +889,10 @@ export default function AdminChatsPage() {
 								<div className="space-y-1">
 									{sessions.map((session) => (
 										<button
-											className={`w-full rounded-md px-3 py-2.5 text-left transition-colors ${
-												selectedSessionId === session.id
-													? "bg-secondary text-foreground"
-													: "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
-											}`}
+											className={`w-full rounded-md px-3 py-2.5 text-left transition-colors ${selectedSessionId === session.id
+												? "bg-secondary text-foreground"
+												: "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+												}`}
 											key={session.id}
 											onClick={() => setSelectedSessionId(session.id)}
 											type="button"
@@ -1049,49 +992,6 @@ export default function AdminChatsPage() {
 							{/* Message Input */}
 							<div className="border-border/40 border-t bg-card/30 p-4">
 								<div className="mx-auto max-w-3xl">
-									{/* Agent/Provider/Model Selection */}
-									<div className="mb-3 flex flex-wrap gap-2">
-										<Select
-											disabled={agents.length === 0}
-											onValueChange={setSelectedAgent}
-											value={agents.length === 0 ? "" : selectedAgent}
-										>
-											<SelectTrigger className="h-8 w-[160px] text-xs">
-												<SelectValue placeholder="Select agent" />
-											</SelectTrigger>
-											<SelectContent>
-												{agents.map((agent) => (
-													<SelectItem key={agent.name} value={agent.name}>
-														{agent.name}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-										<Select
-											onValueChange={setSelectedProvider}
-											value={selectedProvider}
-										>
-											<SelectTrigger className="h-8 w-[130px] text-xs">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value="anthropic">Anthropic</SelectItem>
-												<SelectItem value="openai">OpenAI</SelectItem>
-												<SelectItem value="cerebras">Cerebras</SelectItem>
-												{providers.map((p) => (
-													<SelectItem key={p.id} value={p.id}>
-														{p.name || p.id}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-										<Input
-											className="h-8 flex-1 text-xs"
-											onChange={(e) => setSelectedModel(e.target.value)}
-											placeholder="Model ID"
-											value={selectedModel}
-										/>
-									</div>
 									<div className="flex gap-3">
 										<Textarea
 											className="min-h-[44px] flex-1 resize-none text-sm"
@@ -1108,9 +1008,7 @@ export default function AdminChatsPage() {
 										/>
 										<Button
 											className="h-auto px-4"
-											disabled={
-												!newMessage.trim() || isSending || !selectedAgent
-											}
+											disabled={!newMessage.trim() || isSending}
 											onClick={sendMessage}
 										>
 											{isSending ? (
