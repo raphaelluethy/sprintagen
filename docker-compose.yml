@@ -15,10 +15,12 @@ services:
       - NODE_ENV=development
       # Override for Docker networking - use service name instead of localhost
       - OPENCODE_SERVER_URL=http://opencode:4096
+      - REDIS_URL=redis://redis:6379
     env_file:
       - .env
     depends_on:
       - opencode
+      - redis
     networks:
       - sprintagen-network
 
@@ -43,9 +45,19 @@ services:
     networks:
       - sprintagen-network
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - sprintagen-network
+
 volumes:
   node_modules:
   opencode_data:
+  redis_data:
 
 networks:
   sprintagen-network:

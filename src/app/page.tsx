@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { CreateTicketDialog } from "@/app/_components/create-ticket-dialog";
 import { TicketModal } from "@/app/_components/ticket-modal";
 import { TicketTable } from "@/app/_components/ticket-table";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { useActiveSessions } from "@/hooks/useActiveSessions";
 import type {
 	ticketRankings,
 	ticketRecommendations,
@@ -72,10 +73,34 @@ function DashboardContent() {
 	// Local state for selected ticket (for instant UI updates)
 	const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
 
-	// Track tickets with pending Ask Opencode runs (persists when modal closes)
-	const [pendingAskTicketIds, setPendingAskTicketIds] = useState<Set<string>>(
-		new Set(),
+	// Track the ticket ID currently being processed by the askOpencode mutation
+	// This provides immediate UI feedback before the hook state updates
+	const [mutatingTicketId, setMutatingTicketId] = useState<string | null>(null);
+
+	// Active sessions hook - restores pending sessions on page load
+	const {
+		pendingAskTicketIds,
+		isAskOpencodePending: isAskOpencodePendingFromHook,
+		getPendingSessionId,
+		markTicketPending,
+		setSessionId,
+		refetch: refetchPendingSessions,
+	} = useActiveSessions();
+
+	// Combined check: either the hook says it's pending OR we're currently mutating
+	const isAskOpencodePending = useCallback(
+		(ticketId: string) =>
+			isAskOpencodePendingFromHook(ticketId) || mutatingTicketId === ticketId,
+		[isAskOpencodePendingFromHook, mutatingTicketId],
 	);
+
+	// Combined set for the table: includes both hook state and current mutation
+	const combinedPendingAskTicketIds = useMemo(() => {
+		if (!mutatingTicketId) return pendingAskTicketIds;
+		const combined = new Set(pendingAskTicketIds);
+		combined.add(mutatingTicketId);
+		return combined;
+	}, [pendingAskTicketIds, mutatingTicketId]);
 
 	// Derive modal open state from URL
 	const isModalOpen = !!ticketIdParam;
@@ -113,19 +138,25 @@ function DashboardContent() {
 	// Ask Opencode mutation - lifted to Dashboard level so it persists when modal closes
 	const askOpencodeMutation = api.ticket.askOpencode.useMutation({
 		onMutate: (variables) => {
-			// Add ticket to pending set
-			setPendingAskTicketIds((prev) => new Set([...prev, variables.ticketId]));
+			// Immediately show loading state via local state (instant feedback)
+			setMutatingTicketId(variables.ticketId);
+			// Also mark in the hook for persistence
+			markTicketPending(variables.ticketId);
+		},
+		onSuccess: (data, variables) => {
+			// Store the sessionId for SSE connection when available
+			if (data?.sessionId) {
+				setSessionId(variables.ticketId, data.sessionId);
+			}
 		},
 		onSettled: (_data, _error, variables) => {
-			// Remove ticket from pending set on success or error
-			setPendingAskTicketIds((prev) => {
-				const next = new Set(prev);
-				next.delete(variables.ticketId);
-				return next;
-			});
+			// Clear the local mutating state (the hook state persists)
+			setMutatingTicketId(null);
 			// Invalidate ticket data to refresh recommendations
 			void utils.ticket.byId.invalidate({ id: variables.ticketId });
 			void utils.ticket.list.invalidate();
+			// Also refetch pending inquiries to get updated state
+			void refetchPendingSessions();
 		},
 	});
 
@@ -135,12 +166,6 @@ function DashboardContent() {
 			askOpencodeMutation.mutate({ ticketId });
 		},
 		[askOpencodeMutation],
-	);
-
-	// Check if a specific ticket has a pending Ask Opencode run
-	const isAskOpencodePending = useCallback(
-		(ticketId: string) => pendingAskTicketIds.has(ticketId),
-		[pendingAskTicketIds],
 	);
 
 	const handleTicketSelect = (ticket: Ticket) => {
@@ -344,7 +369,7 @@ function DashboardContent() {
 					onStatusFilterChange={handleStatusFilterChange}
 					onTicketSelect={handleTicketSelect}
 					onViewModeChange={handleViewModeChange}
-					pendingAskTicketIds={pendingAskTicketIds}
+					pendingAskTicketIds={combinedPendingAskTicketIds}
 					sortBy={validSortBy}
 					sortOrder={validSortOrder}
 					statusFilter={validStatusFilter}
@@ -354,6 +379,7 @@ function DashboardContent() {
 
 			{/* Ticket Detail Modal */}
 			<TicketModal
+				getPendingSessionId={getPendingSessionId}
 				isAskOpencodePending={isAskOpencodePending}
 				onAskOpencode={handleAskOpencode}
 				onClose={handleModalClose}

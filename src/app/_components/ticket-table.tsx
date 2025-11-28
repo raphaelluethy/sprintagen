@@ -74,18 +74,18 @@ export function TicketTable({
 		viewMode === "ai-ranked"
 			? undefined
 			: {
-				sortBy,
-				sortOrder,
-				status:
-					statusFilter !== "all"
-						? (statusFilter as
-							| "open"
-							| "in_progress"
-							| "review"
-							| "done"
-							| "closed")
-						: undefined,
-			},
+					sortBy,
+					sortOrder,
+					status:
+						statusFilter !== "all"
+							? (statusFilter as
+									| "open"
+									| "in_progress"
+									| "review"
+									| "done"
+									| "closed")
+							: undefined,
+				},
 		{ refetchInterval: 30000 },
 	);
 

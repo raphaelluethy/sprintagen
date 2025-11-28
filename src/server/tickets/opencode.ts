@@ -143,7 +143,7 @@ export type { ToolPart, ReasoningPart };
 /**
  * Opencode message structure
  */
-interface OpencodeMessage {
+export interface OpencodeMessage {
 	info: {
 		id: string;
 		sessionID: string;
@@ -751,6 +751,10 @@ export async function sendOpencodeMessage(
 		}
 
 		const responseData = await response.json();
+		console.log(
+			"[OPENCODE] sendOpencodeMessage response:",
+			JSON.stringify(responseData, null, 2).substring(0, 500),
+		);
 
 		// Check if the response is an error object (Opencode may return errors with 200 status)
 		if (
@@ -762,6 +766,10 @@ export async function sendOpencodeMessage(
 				responseData.message ||
 				responseData.error ||
 				"Opencode returned an error";
+			console.log(
+				"[OPENCODE] sendOpencodeMessage detected error:",
+				errorMessage,
+			);
 			return {
 				success: false,
 				error: errorMessage,
@@ -770,6 +778,13 @@ export async function sendOpencodeMessage(
 
 		// Handle case where response might be wrapped in a data property
 		const messageData = responseData.data || responseData;
+		console.log(
+			"[OPENCODE] sendOpencodeMessage messageData check:",
+			"messageData exists:",
+			!!messageData,
+			"info exists:",
+			!!messageData?.info,
+		);
 		if (!messageData || !messageData.info) {
 			return {
 				success: false,

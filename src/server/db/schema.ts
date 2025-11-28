@@ -73,6 +73,7 @@ export const ticketRelations = relations(tickets, ({ many }) => ({
 	recommendations: many(ticketRecommendations),
 	messages: many(ticketMessages),
 	rankings: many(ticketRankings),
+	opencodeSessions: many(opencodeSessionsTable),
 }));
 
 export const ticketRecommendations = sqliteTable(
@@ -182,6 +183,51 @@ export const ticketRankingRelations = relations(ticketRankings, ({ one }) => ({
 		references: [tickets.id],
 	}),
 }));
+
+// ============================================================================
+// Opencode Sessions Table
+// ============================================================================
+
+export const opencodeSessionsTable = sqliteTable(
+	"opencode_session",
+	(d) => ({
+		id: d.text({ length: 255 }).notNull().primaryKey(), // OpenCode session ID
+		ticketId: d
+			.text({ length: 255 })
+			.references(() => tickets.id, { onDelete: "cascade" }),
+		sessionType: d
+			.text({ length: 50 })
+			.notNull()
+			.$type<"chat" | "ask" | "admin">(), // "chat" | "ask" | "admin"
+		status: d
+			.text({ length: 50 })
+			.notNull()
+			.$type<"pending" | "running" | "completed" | "error">(), // "pending" | "running" | "completed" | "error"
+		messages: d.text({ mode: "json" }).$type<unknown[]>().default([]), // Archived message array
+		metadata: d.text({ mode: "json" }).$type<Record<string, unknown>>(), // Additional context (prompt, ticket title, etc.)
+		startedAt: d
+			.integer({ mode: "timestamp" })
+			.default(sql`(unixepoch())`)
+			.notNull(),
+		completedAt: d.integer({ mode: "timestamp" }),
+		errorMessage: d.text(),
+	}),
+	(t) => [
+		index("opencode_session_ticket_idx").on(t.ticketId),
+		index("opencode_session_status_idx").on(t.status),
+		index("opencode_session_started_idx").on(t.startedAt),
+	],
+);
+
+export const opencodeSessionRelations = relations(
+	opencodeSessionsTable,
+	({ one }) => ({
+		ticket: one(tickets, {
+			fields: [opencodeSessionsTable.ticketId],
+			references: [tickets.id],
+		}),
+	}),
+);
 
 // ============================================================================
 // Posts example table (original)

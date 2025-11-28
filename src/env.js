@@ -36,6 +36,8 @@ export const env = createEnv({
 		// Docker configuration
 		DOCKER_SOCKET: z.string().optional(),
 		OPENCODE_IMAGE: z.string().optional(),
+		// Redis configuration
+		REDIS_URL: z.string().url().default("redis://localhost:6379"),
 
 		FAST_MODE: z.boolean().optional().default(false),
 	},
@@ -77,6 +79,8 @@ export const env = createEnv({
 		// Docker configuration
 		DOCKER_SOCKET: process.env.DOCKER_SOCKET,
 		OPENCODE_IMAGE: process.env.OPENCODE_IMAGE,
+		// Redis
+		REDIS_URL: process.env.REDIS_URL ?? "redis://localhost:6379",
 		FAST_MODE: process.env.FAST_MODE === "true",
 		// Client-side - use NEXT_PUBLIC_ prefixed variable
 		NEXT_PUBLIC_FAST_MODE: process.env.NEXT_PUBLIC_FAST_MODE === "true",

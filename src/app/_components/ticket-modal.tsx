@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { useOpencodeStream } from "@/hooks/useOpencodeStream";
 import type {
 	ticketMessages,
 	ticketRankings,
@@ -90,6 +91,8 @@ interface TicketModalProps {
 	onAskOpencode: (ticketId: string) => void;
 	// Check if a specific ticket has a pending Ask Opencode run
 	isAskOpencodePending: (ticketId: string) => boolean;
+	// Get the session ID for a pending ticket (for SSE connection)
+	getPendingSessionId: (ticketId: string) => string | null;
 }
 
 // Live analysis progress component for Ask Opencode
@@ -237,11 +240,12 @@ function LiveAnalysisProgress({
 				<div className="space-y-1.5">
 					{steps.map((step, index) => (
 						<div
-							className={`flex items-center gap-2 rounded-md border px-3 py-2 transition-all ${index === steps.length - 1 &&
-									(step.status === "running" || step.status === "pending")
+							className={`flex items-center gap-2 rounded-md border px-3 py-2 transition-all ${
+								index === steps.length - 1 &&
+								(step.status === "running" || step.status === "pending")
 									? "border-foreground/20 bg-foreground/5"
 									: "border-border/60 bg-card/50"
-								}`}
+							}`}
 							key={step.id}
 						>
 							{getStatusIcon(step.status)}
@@ -281,6 +285,7 @@ export function TicketModal({
 	onClose,
 	onAskOpencode,
 	isAskOpencodePending,
+	getPendingSessionId,
 }: TicketModalProps) {
 	const [chatInput, setChatInput] = useState("");
 	const [opencodeChatInput, setOpencodeChatInput] = useState("");
@@ -298,6 +303,12 @@ export function TicketModal({
 	>(null);
 	// Track if we've already requested a session for this modal open
 	const [sessionRequested, setSessionRequested] = useState(false);
+
+	// Get the pending session ID for this ticket (if any)
+	const pendingSessionId = ticket?.id ? getPendingSessionId(ticket.id) : null;
+
+	// Connect to SSE stream for live updates when there's a pending session
+	const sseStream = useOpencodeStream(open ? pendingSessionId : null);
 
 	// Reset session state when ticket changes
 	const ticketId = ticket?.id;
@@ -431,6 +442,23 @@ export function TicketModal({
 		? isAskOpencodePending(ticket.id)
 		: false;
 
+	// Use SSE stream data for live analysis steps when available
+	useEffect(() => {
+		if (sseStream.toolCalls && sseStream.toolCalls.length > 0) {
+			// Transform SSE tool calls to the expected format
+			const steps = sseStream.toolCalls.map((t) => ({
+				id: t.id,
+				tool: t.tool,
+				title:
+					t.state.status === "completed" || t.state.status === "running"
+						? (t.state.title ?? "")
+						: "",
+				status: t.state.status,
+			}));
+			setLiveAnalysisSteps(steps);
+		}
+	}, [sseStream.toolCalls]);
+
 	// Reset live steps when the analysis completes
 	useEffect(() => {
 		if (!thisTicketAskPending && liveAnalysisSteps.length > 0) {
@@ -441,7 +469,11 @@ export function TicketModal({
 	}, [thisTicketAskPending, liveAnalysisSteps.length]);
 
 	// Poll for live analysis steps when askOpencode is running for this ticket
+	// This is a fallback when SSE is not connected
 	const pollForSteps = useCallback(async () => {
+		// Skip polling if SSE is connected and providing data
+		if (sseStream.isConnected && sseStream.toolCalls.length > 0) return;
+
 		// Only poll if this ticket has a pending Ask Opencode run
 		if (!thisTicketAskPending || !ticket?.id) return;
 
@@ -489,9 +521,14 @@ export function TicketModal({
 		} catch {
 			// Silently ignore polling errors
 		}
-	}, [thisTicketAskPending, ticket?.id]);
+	}, [
+		thisTicketAskPending,
+		ticket?.id,
+		sseStream.isConnected,
+		sseStream.toolCalls.length,
+	]);
 
-	// Set up polling interval when analyzing
+	// Set up polling interval when analyzing (fallback when SSE is not working)
 	useEffect(() => {
 		if (!thisTicketAskPending) return;
 
@@ -499,12 +536,15 @@ export function TicketModal({
 		lastSeenToolCountRef.current = 0;
 		setLiveAnalysisSteps([]);
 
+		// Only use polling if SSE is not connected
+		if (sseStream.isConnected) return;
+
 		// Poll immediately and then every 500ms
 		pollForSteps();
 		const interval = setInterval(pollForSteps, 500);
 
 		return () => clearInterval(interval);
-	}, [thisTicketAskPending, pollForSteps]);
+	}, [thisTicketAskPending, pollForSteps, sseStream.isConnected]);
 
 	// Scroll to bottom when messages change
 	useEffect(() => {
@@ -883,10 +923,11 @@ export function TicketModal({
 												key={msg.id}
 											>
 												<div
-													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${msg.role === "user"
+													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${
+														msg.role === "user"
 															? "bg-foreground text-background"
 															: "border border-border/60 bg-card/50"
-														}`}
+													}`}
 												>
 													<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
 														<Markdown>{msg.content}</Markdown>
@@ -975,7 +1016,7 @@ export function TicketModal({
 									<ScrollArea className="min-h-0 flex-1">
 										<div className="space-y-3 pr-4">
 											{startSessionMutation.isPending ||
-												opencodeChatQuery.isLoading ? (
+											opencodeChatQuery.isLoading ? (
 												<div className="space-y-3">
 													<div className="flex items-center gap-2">
 														<svg
@@ -1057,10 +1098,11 @@ export function TicketModal({
 																className={`flex ${isUser ? "justify-end" : "justify-start"}`}
 															>
 																<div
-																	className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${isUser
+																	className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${
+																		isUser
 																			? "bg-foreground text-background"
 																			: "border border-border/60 bg-card/50"
-																		} ${isLegacySession ? "opacity-60" : ""}`}
+																	} ${isLegacySession ? "opacity-60" : ""}`}
 																>
 																	{/* Reasoning section (collapsible) for assistant messages */}
 																	{!isUser && hasReasoning && (
