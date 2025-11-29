@@ -28,6 +28,7 @@
 		"@ai-sdk/cerebras": "^1.0.31",
 		"@auth/drizzle-adapter": "^1.7.2",
 		"@libsql/client": "^0.15.15",
+		"@opencode-ai/sdk": "^1.0.119",
 		"@openrouter/ai-sdk-provider": "^1.2.7",
 		"@radix-ui/react-dialog": "^1.1.15",
 		"@radix-ui/react-scroll-area": "^1.2.10",

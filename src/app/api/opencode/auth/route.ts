@@ -1,24 +1,20 @@
 import { NextResponse } from "next/server";
 import { env } from "@/env";
-import { fetchFromOpencode } from "@/lib/opencode";
+import { getOpencodeClient } from "@/lib/opencode-client";
 
-/**
- * Configure auth with opencode server using the official API.
- * Proxies to PUT /auth/:id endpoint as documented in:
- * https://github.com/sst/opencode/blob/main/packages/web/src/content/docs/server.mdx
- */
 async function configureProviderAuth(providerId: string, apiKey: string) {
-	const response = await fetchFromOpencode(`/auth/${providerId}`, {
-		method: "PUT",
-		headers: {
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({ type: "api", key: apiKey }),
+	const client = getOpencodeClient();
+	const result = await client.auth.set({
+		path: { id: providerId },
+		body: { type: "api", key: apiKey },
 	});
 
-	if (!response.ok) {
-		const errorText = await response.text();
-		throw new Error(`Failed to configure auth: ${errorText}`);
+	if (!result.data) {
+		const status = result.response?.status ?? 500;
+		const detail = result.error
+			? JSON.stringify(result.error)
+			: "Unknown error";
+		throw new Error(`Failed to configure auth (${status}): ${detail}`);
 	}
 
 	return true;

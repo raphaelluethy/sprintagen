@@ -1,69 +1,50 @@
 import { NextResponse } from "next/server";
-import { fetchFromOpencode } from "@/lib/opencode";
+import { getOpencodeClient } from "@/lib/opencode-client";
 
-type OpencodeProviderModel = { name?: string };
+type ErrorPayload = { error: string; details?: unknown };
 
-type OpencodeProvider = {
-	id: string;
-	name: string;
-	models?: Record<string, OpencodeProviderModel>;
-};
+function buildErrorResponse(payload: ErrorPayload, status: number) {
+	return NextResponse.json(payload, { status });
+}
 
-type ProvidersResponse = {
-	providers?: OpencodeProvider[];
-	default?: Record<string, string>;
-};
-
-/**
- * GET /api/opencode/providers - List available AI providers
- * Proxies to GET /providers endpoint as documented in:
- * https://github.com/sst/opencode/
- *
- * Transforms the response from { providers: Provider[], default: Record<string,string> }
- * into an array format that the UI expects: { id, name, models? }[]
- */
 export async function GET() {
 	try {
-		const response = await fetchFromOpencode("/config/providers", {
-			method: "GET",
-			headers: { "Content-Type": "application/json" },
-		});
+		const client = getOpencodeClient();
+		const result = await client.config.providers();
 
-		if (!response.ok) {
-			return NextResponse.json(
-				{ error: `Opencode server returned ${response.status}` },
-				{ status: response.status },
+		if (!result.data) {
+			const status = result.response?.status ?? 500;
+			return buildErrorResponse(
+				{
+					error: `Opencode server returned ${status}`,
+					details: result.error,
+				},
+				status,
 			);
 		}
 
-		const data: ProvidersResponse = await response.json();
-
-		// Transform the response to match UI expectations
-		// Upstream returns: { providers: Provider[], default: Record<string,string> }
-		// UI expects: Array<{ id: string, name: string, models?: { id: string, name: string }[] }>
-		const providers: OpencodeProvider[] = Array.isArray(data.providers)
-			? data.providers
+		const providers = Array.isArray(result.data.providers)
+			? result.data.providers
 			: [];
+
 		const transformed = providers.map((provider) => ({
 			id: provider.id,
 			name: provider.name,
 			models: provider.models
-				? Object.entries(provider.models).map(
-						([id, model]: [string, OpencodeProviderModel]) => ({
-							id,
-							name: model.name || id,
-						}),
-					)
+				? Object.entries(provider.models).map(([id, model]) => ({
+						id,
+						name: model.name ?? id,
+					}))
 				: undefined,
 		}));
 
-		return NextResponse.json(transformed);
+		return NextResponse.json(transformed, { status: result.response?.status });
 	} catch (error) {
 		const message =
 			error instanceof Error ? error.message : "Unknown error occurred";
-		return NextResponse.json(
+		return buildErrorResponse(
 			{ error: `Failed to fetch providers: ${message}` },
-			{ status: 500 },
+			500,
 		);
 	}
 }

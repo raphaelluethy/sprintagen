@@ -7,6 +7,16 @@
   "agent": {
     "docs-agent": {
       "mode": "primary",
+      "description": "Documentation specialist - handles all queries",
+    },
+    "build": {
+      "disable": true,
+    },
+    "plan": {
+      "disable": true,
+    },
+    "general": {
+      "disable": true,
     },
   },
   // // Configure Cerebras provider with API key from environment

@@ -1,35 +1,35 @@
 import { NextResponse } from "next/server";
-import { fetchFromOpencode } from "@/lib/opencode";
+import { getOpencodeClient } from "@/lib/opencode-client";
 
-/**
- * GET /api/opencode/agents - List all available agents
- * Proxies to GET /agent endpoint as documented in:
- * https://github.com/sst/opencode/blob/main/packages/web/src/content/docs/server.mdx
- *
- * Returns array of Agent.Info objects with fields: { name, description?, mode?, builtIn? }
- */
+type ErrorPayload = { error: string; details?: unknown };
+
+function buildErrorResponse(payload: ErrorPayload, status: number) {
+	return NextResponse.json(payload, { status });
+}
+
 export async function GET() {
 	try {
-		const response = await fetchFromOpencode("/agent", {
-			method: "GET",
-			headers: { "Content-Type": "application/json" },
-		});
+		const client = getOpencodeClient();
+		const result = await client.app.agents();
 
-		if (!response.ok) {
-			return NextResponse.json(
-				{ error: `Opencode server returned ${response.status}` },
-				{ status: response.status },
+		if (!result.data) {
+			const status = result.response?.status ?? 500;
+			return buildErrorResponse(
+				{
+					error: `Opencode server returned ${status}`,
+					details: result.error,
+				},
+				status,
 			);
 		}
 
-		const data = await response.json();
-		return NextResponse.json(data);
+		return NextResponse.json(result.data, { status: result.response?.status });
 	} catch (error) {
 		const message =
 			error instanceof Error ? error.message : "Unknown error occurred";
-		return NextResponse.json(
+		return buildErrorResponse(
 			{ error: `Failed to fetch agents: ${message}` },
-			{ status: 500 },
+			500,
 		);
 	}
 }

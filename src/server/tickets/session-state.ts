@@ -1,6 +1,9 @@
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/server/db";
-import { opencodeSessionsTable } from "@/server/db/schema";
+import {
+	opencodeSessionsTable,
+	ticketRecommendations,
+} from "@/server/db/schema";
 import {
 	isRedisAvailable,
 	RedisKeys,
@@ -186,6 +189,31 @@ export async function completeSession(
 		);
 	}
 
+	const assistantMessages = state.messages
+		.filter((message) => message.role === "assistant" && message.text?.trim())
+		.map((message) => message.text)
+		.filter(Boolean);
+
+	if (
+		state.ticketId &&
+		state.sessionType === "ask" &&
+		assistantMessages.length > 0
+	) {
+		const finalText = assistantMessages.join("\n\n");
+		try {
+			await db.insert(ticketRecommendations).values({
+				ticketId: state.ticketId,
+				opencodeSummary: finalText,
+				modelUsed: "opencode",
+			});
+		} catch (error) {
+			console.error(
+				`[SESSION-STATE] Failed to save Opencode summary for ticket ${state.ticketId}:`,
+				error,
+			);
+		}
+	}
+
 	// Clean up Redis
 	await redis.del(key);
 
@@ -256,6 +284,8 @@ export async function getSessionHistory(ticketId: string) {
 	});
 }
 
+const STALE_SESSION_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Get all pending/running sessions for a list of ticket IDs
  * Returns a map of ticketId -> session state for tickets with active sessions
@@ -275,11 +305,24 @@ export async function getPendingSessionsForTickets(
 		if (!sessionId) continue;
 
 		const state = await getSessionState(sessionId);
-		if (!state) continue;
+		if (!state) {
+			// Session missing in Redis; clean the active key
+			const activeKey = RedisKeys.activeSession(ticketId);
+			await redis.del(activeKey);
+			continue;
+		}
 
-		// Only include sessions that are still pending or running
-		if (state.status === "pending" || state.status === "running") {
+		// Only include sessions that are still pending or running (and fresh)
+		const isPendingOrRunning =
+			state.status === "pending" || state.status === "running";
+		const isStale = Date.now() - state.updatedAt > STALE_SESSION_WINDOW_MS;
+
+		if (isPendingOrRunning && !isStale) {
 			result.set(ticketId, state);
+		} else {
+			// Clean up stale or completed/error active references
+			const activeKey = RedisKeys.activeSession(ticketId);
+			await redis.del(activeKey);
 		}
 	}
 
@@ -315,18 +358,31 @@ export async function getAllPendingSessions(): Promise<RedisSessionState[]> {
 				console.log(
 					`[SESSION-STATE] Key ${key} maps to sessionId: ${sessionId}`,
 				);
-				if (!sessionId) continue;
+				if (!sessionId) {
+					await redis.del(key);
+					continue;
+				}
 
 				// Get the full session state
 				const state = await getSessionState(sessionId);
 				console.log(
 					`[SESSION-STATE] Session ${sessionId} state: ${state ? state.status : "not found"}`,
 				);
-				if (!state) continue;
+				if (!state) {
+					await redis.del(key);
+					continue;
+				}
 
-				// Only include sessions that are still pending or running
-				if (state.status === "pending" || state.status === "running") {
+				// Only include sessions that are still pending or running (and fresh)
+				const isPendingOrRunning =
+					state.status === "pending" || state.status === "running";
+				const isStale = Date.now() - state.updatedAt > STALE_SESSION_WINDOW_MS;
+
+				if (isPendingOrRunning && !isStale) {
 					sessions.push(state);
+				} else {
+					// Clean up stale active references for completed/error sessions
+					await redis.del(key);
 				}
 			}
 
