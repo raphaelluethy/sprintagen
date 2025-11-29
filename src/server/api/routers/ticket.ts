@@ -30,6 +30,7 @@ import {
 	createNewOpencodeSessionForTicket,
 	getOpencodeMessages,
 	sendOpencodeMessage,
+	type OpencodeChatMessage,
 } from "@/server/tickets/opencode";
 import { startPolling } from "@/server/tickets/opencode-poller";
 import { getProviderRegistry } from "@/server/tickets/provider-registry";
@@ -853,7 +854,15 @@ export const ticketRouter = createTRPCRouter({
 		.input(z.object({ ticketId: z.string() }))
 		.query(async ({ input }) => {
 			const sessions = await getSessionHistory(input.ticketId);
-			return sessions;
+			return sessions.map((session) => ({
+				...session,
+				messages: ((session.messages ?? []) as OpencodeChatMessage[]).map(
+					(message) => ({
+						...message,
+						createdAt: new Date(message.createdAt),
+					}),
+				),
+			}));
 		}),
 
 	/**
@@ -906,12 +915,11 @@ export const ticketRouter = createTRPCRouter({
 
 			const defaultQuestion = dedent(`
 				Please analyze this ticket and provide:
-				1. A high-level implementation plan with key steps
+				1. A high-level implementation plan with key steps (keep this very short, do not try to investigate the issue, if it is not easily found, just say "The issue is too complex to analyze for a quick recommendation")
 				2. Which files/modules in the codebase are most likely to be affected
 				3. Recommend a programmer for the ticket that has touched the files that are most likely to be affected most recently using git history
-				4. Any risks or considerations
 
-				Be concise but thorough.
+				Be concise and helpful.
 			`);
 
 			const prompt = dedent(`
@@ -961,7 +969,7 @@ export const ticketRouter = createTRPCRouter({
 			await createPendingSession(sessionId, {
 				ticketId: input.ticketId,
 				sessionType: "ask",
-				metadata: { prompt, ticketTitle: ticket.title },
+				metadata: { prompt, ticketTitle: ticket.title, agent: "docs-agent" },
 			});
 			console.log("[OPENCODE] Pending session created in Redis");
 

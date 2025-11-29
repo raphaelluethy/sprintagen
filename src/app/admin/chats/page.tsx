@@ -745,6 +745,7 @@ export default function AdminChatsPage() {
 
 		// Construct PromptInput payload according to Opencode API spec
 		const payload = {
+			agent: "docs-agent",
 			parts: [
 				{
 					type: "text",

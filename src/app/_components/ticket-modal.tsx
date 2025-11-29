@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -89,6 +89,8 @@ interface TicketModalProps {
 	onClose: () => void;
 	// Ask Opencode callback - lifted to parent so it persists when modal closes
 	onAskOpencode: (ticketId: string) => void;
+	// Callback to clear pending state when we detect completion client-side
+	onAskOpencodeComplete?: (ticketId: string) => void;
 	// Check if a specific ticket has a pending Ask Opencode run
 	isAskOpencodePending: (ticketId: string) => boolean;
 	// Get the session ID for a pending ticket (for SSE connection)
@@ -284,6 +286,7 @@ export function TicketModal({
 	open,
 	onClose,
 	onAskOpencode,
+	onAskOpencodeComplete,
 	isAskOpencodePending,
 	getPendingSessionId,
 }: TicketModalProps) {
@@ -303,6 +306,7 @@ export function TicketModal({
 	>(null);
 	// Track if we've already requested a session for this modal open
 	const [sessionRequested, setSessionRequested] = useState(false);
+	const completionNotifiedRef = useRef(false);
 
 	// Get the pending session ID for this ticket (if any)
 	const pendingSessionId = ticket?.id ? getPendingSessionId(ticket.id) : null;
@@ -318,6 +322,7 @@ export function TicketModal({
 		void ticketId;
 		setOpencodeChatSessionId(null);
 		setSessionRequested(false);
+		completionNotifiedRef.current = false;
 	}, [ticketId]);
 
 	// Fetch full ticket data with messages
@@ -442,6 +447,48 @@ export function TicketModal({
 		? isAskOpencodePending(ticket.id)
 		: false;
 
+	const askRunCompleted =
+		thisTicketAskPending &&
+		(sseStream.status === "completed" ||
+			sseStream.status === "error" ||
+			opencodeData?.status === "completed" ||
+			opencodeData?.status === "error");
+	const askOpencodeInFlight = thisTicketAskPending && !askRunCompleted;
+
+	const sessionHistoryQuery = api.ticket.getSessionHistory.useQuery(
+		{ ticketId: ticket?.id ?? "" },
+		{
+			enabled: !!ticket?.id && open && !askOpencodeInFlight,
+			staleTime: 30000,
+		},
+	);
+
+	const archivedSessions = useMemo(
+		() =>
+			(sessionHistoryQuery.data ?? []).map((session) => ({
+				...session,
+				messages: ((session.messages ?? []) as OpencodeChatMessage[]).map(
+					(message) => ({
+						...message,
+						createdAt: new Date(message.createdAt),
+					}),
+				),
+			})),
+		[sessionHistoryQuery.data],
+	);
+
+	useEffect(() => {
+		if (
+			askRunCompleted &&
+			!askOpencodeInFlight &&
+			ticket?.id &&
+			!completionNotifiedRef.current
+		) {
+			completionNotifiedRef.current = true;
+			onAskOpencodeComplete?.(ticket.id);
+		}
+	}, [askOpencodeInFlight, askRunCompleted, onAskOpencodeComplete, ticket?.id]);
+
 	// Use SSE stream data for live analysis steps when available
 	useEffect(() => {
 		if (sseStream.toolCalls && sseStream.toolCalls.length > 0) {
@@ -461,12 +508,12 @@ export function TicketModal({
 
 	// Reset live steps when the analysis completes
 	useEffect(() => {
-		if (!thisTicketAskPending && liveAnalysisSteps.length > 0) {
+		if (!askOpencodeInFlight && liveAnalysisSteps.length > 0) {
 			// Clear live steps after a brief delay to show completion
 			const timeout = setTimeout(() => setLiveAnalysisSteps([]), 500);
 			return () => clearTimeout(timeout);
 		}
-	}, [thisTicketAskPending, liveAnalysisSteps.length]);
+	}, [askOpencodeInFlight, liveAnalysisSteps.length]);
 
 	// Poll for live analysis steps when askOpencode is running for this ticket
 	// This is a fallback when SSE is not connected
@@ -475,7 +522,7 @@ export function TicketModal({
 		if (sseStream.isConnected && sseStream.toolCalls.length > 0) return;
 
 		// Only poll if this ticket has a pending Ask Opencode run
-		if (!thisTicketAskPending || !ticket?.id) return;
+		if (!askOpencodeInFlight || !ticket?.id) return;
 
 		try {
 			// Fetch latest messages from the Opencode chat for this ticket
@@ -522,7 +569,7 @@ export function TicketModal({
 			// Silently ignore polling errors
 		}
 	}, [
-		thisTicketAskPending,
+		askOpencodeInFlight,
 		ticket?.id,
 		sseStream.isConnected,
 		sseStream.toolCalls.length,
@@ -530,7 +577,7 @@ export function TicketModal({
 
 	// Set up polling interval when analyzing (fallback when SSE is not working)
 	useEffect(() => {
-		if (!thisTicketAskPending) return;
+		if (!askOpencodeInFlight) return;
 
 		// Reset tool count when starting a new analysis
 		lastSeenToolCountRef.current = 0;
@@ -544,7 +591,7 @@ export function TicketModal({
 		const interval = setInterval(pollForSteps, 500);
 
 		return () => clearInterval(interval);
-	}, [thisTicketAskPending, pollForSteps, sseStream.isConnected]);
+	}, [askOpencodeInFlight, pollForSteps, sseStream.isConnected]);
 
 	// Scroll to bottom when messages change
 	useEffect(() => {
@@ -803,12 +850,12 @@ export function TicketModal({
 						<div className="space-y-4">
 							<div className="flex flex-wrap items-center justify-end gap-2">
 								<Button
-									disabled={!opencodeAvailable || thisTicketAskPending}
+									disabled={!opencodeAvailable || askOpencodeInFlight}
 									onClick={handleAskOpencode}
 									size="sm"
 									variant="outline"
 								>
-									{thisTicketAskPending ? "Analyzing..." : "Ask Opencode"}
+									{askOpencodeInFlight ? "Analyzing..." : "Ask Opencode"}
 									{!opencodeAvailable && (
 										<span className="ml-1 text-muted-foreground text-xs">
 											(unavailable)
@@ -833,7 +880,7 @@ export function TicketModal({
 									<Skeleton className="h-4 w-3/4" />
 									<Skeleton className="h-4 w-5/6" />
 								</div>
-							) : thisTicketAskPending ? (
+							) : askOpencodeInFlight ? (
 								<LiveAnalysisProgress steps={liveAnalysisSteps} />
 							) : latestRecommendation ? (
 								<div className="space-y-6">
@@ -894,6 +941,134 @@ export function TicketModal({
 										recommendations or &ldquo;Ask Opencode&rdquo; for
 										implementation analysis
 									</p>
+								</div>
+							)}
+
+							{!askOpencodeInFlight && (
+								<div className="space-y-3">
+									<div className="flex items-center justify-between">
+										<span className="text-muted-foreground text-xs uppercase tracking-wider">
+											Past Opencode Sessions
+										</span>
+										{sessionHistoryQuery.isLoading && (
+											<span className="text-muted-foreground text-xs">
+												Loading…
+											</span>
+										)}
+									</div>
+
+									{sessionHistoryQuery.isError ? (
+										<p className="text-destructive text-xs">
+											Unable to load previous Opencode sessions.
+										</p>
+									) : archivedSessions.length === 0 ? (
+										<p className="text-muted-foreground text-sm">
+											No previous Opencode sessions for this ticket.
+										</p>
+									) : (
+										<div className="space-y-3">
+											{archivedSessions.map((session) => (
+												<Card
+													className="border-border/40 bg-card/40"
+													key={session.id}
+												>
+													<CardContent className="space-y-3 p-4">
+														<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+															<span className="uppercase tracking-wider">
+																{session.sessionType} · {session.status}
+															</span>
+															<span className="tabular-nums">
+																{new Date(session.startedAt).toLocaleString()}
+															</span>
+														</div>
+
+														<div className="space-y-2">
+															{session.messages.length === 0 ? (
+																<p className="text-muted-foreground text-sm">
+																	No messages archived for this session.
+																</p>
+															) : (
+																session.messages.map((msg) => {
+																	const isUser = msg.role === "user";
+																	const toolParts =
+																		msg.parts?.filter(
+																			(p): p is ToolPart => p.type === "tool",
+																		) ?? [];
+																	const reasoningParts =
+																		msg.parts?.filter(
+																			(p): p is ReasoningPart =>
+																				p.type === "reasoning",
+																		) ?? [];
+																	const hasReasoning =
+																		reasoningParts.length > 0 || msg.reasoning;
+																	const reasoningText =
+																		msg.reasoning ??
+																		reasoningParts
+																			.map((p) => p.text)
+																			.join("\n")
+																			.trim();
+
+																	return (
+																		<div
+																			className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+																			key={msg.id}
+																		>
+																			<div
+																				className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${
+																					isUser
+																						? "bg-foreground text-background"
+																						: "border border-border/60 bg-card/50"
+																				}`}
+																			>
+																				{!isUser && hasReasoning && (
+																					<OpencodeReasoningDisplay
+																						reasoning={reasoningText}
+																					/>
+																				)}
+
+																				{!isUser && toolParts.length > 0 && (
+																					<div className="mb-3">
+																						{toolParts.map((tool) => (
+																							<OpencodeToolCallDisplay
+																								key={tool.id}
+																								tool={tool}
+																							/>
+																						))}
+																					</div>
+																				)}
+
+																				{msg.text && (
+																					<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
+																						<Markdown>{msg.text}</Markdown>
+																					</div>
+																				)}
+
+																				<div className="mt-1 flex items-center gap-2 text-xs tabular-nums opacity-50">
+																					<span>
+																						{new Date(
+																							msg.createdAt,
+																						).toLocaleTimeString()}
+																					</span>
+																					{msg.model && (
+																						<Badge
+																							className="h-4 px-1 font-normal text-[10px]"
+																							variant="outline"
+																						>
+																							{msg.model}
+																						</Badge>
+																					)}
+																				</div>
+																			</div>
+																		</div>
+																	);
+																})
+															)}
+														</div>
+													</CardContent>
+												</Card>
+											))}
+										</div>
+									)}
 								</div>
 							)}
 						</div>
@@ -958,7 +1133,7 @@ export function TicketModal({
 							<div className="mt-4 space-y-2">
 								<div className="flex gap-2">
 									<Textarea
-										className="min-h-[44px] resize-none text-sm"
+										className="min-h-11 resize-none text-sm"
 										disabled={chatMutation.isPending}
 										onChange={(e) => setChatInput(e.target.value)}
 										onKeyDown={(e) => {
@@ -1171,7 +1346,7 @@ export function TicketModal({
 									<div className="mt-4 space-y-2">
 										<div className="flex gap-2">
 											<Textarea
-												className="min-h-[44px] resize-none text-sm"
+												className="min-h-11 resize-none text-sm"
 												disabled={
 													sendOpencodeMutation.isPending ||
 													startSessionMutation.isPending ||

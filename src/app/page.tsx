@@ -84,6 +84,7 @@ function DashboardContent() {
 		getPendingSessionId,
 		markTicketPending,
 		setSessionId,
+		clearTicketPending,
 		refetch: refetchPendingSessions,
 	} = useActiveSessions();
 
@@ -382,6 +383,7 @@ function DashboardContent() {
 				getPendingSessionId={getPendingSessionId}
 				isAskOpencodePending={isAskOpencodePending}
 				onAskOpencode={handleAskOpencode}
+				onAskOpencodeComplete={clearTicketPending}
 				onClose={handleModalClose}
 				open={isModalOpen}
 				ticket={modalTicket}

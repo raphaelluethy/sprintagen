@@ -22,6 +22,8 @@ interface UseActiveSessionsResult {
 	setSessionId: (ticketId: string, sessionId: string) => void;
 	/** Add a new pending session with sessionId (convenience method) */
 	addPendingSession: (ticketId: string, sessionId: string) => void;
+	/** Clear a pending session (used when we detect completion client-side) */
+	clearTicketPending: (ticketId: string) => void;
 	/** Whether we're still loading the initial session state */
 	isRestoring: boolean;
 	/** Refetch pending sessions from the backend */
@@ -135,6 +137,21 @@ export function useActiveSessions(): UseActiveSessionsResult {
 		[markTicketPending, setSessionId],
 	);
 
+	const clearTicketPending = useCallback((ticketId: string) => {
+		setPendingAskTicketIds((prev) => {
+			if (!prev.has(ticketId)) return prev;
+			const next = new Set(prev);
+			next.delete(ticketId);
+			return next;
+		});
+		setPendingSessionMap((prev) => {
+			if (!prev.has(ticketId)) return prev;
+			const next = new Map(prev);
+			next.delete(ticketId);
+			return next;
+		});
+	}, []);
+
 	// Refetch pending sessions
 	const refetch = useCallback(async () => {
 		await pendingInquiriesQuery.refetch();
@@ -147,6 +164,7 @@ export function useActiveSessions(): UseActiveSessionsResult {
 		markTicketPending,
 		setSessionId,
 		addPendingSession,
+		clearTicketPending,
 		isRestoring: pendingInquiriesQuery.isLoading,
 		refetch,
 		pendingInquiries: (pendingInquiriesQuery.data ?? []) as PendingInquiry[],
