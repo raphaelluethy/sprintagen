@@ -99,6 +99,7 @@ export async function updateSessionState(
 	sessionId: string,
 	updates: {
 		messages?: OpencodeChatMessage[];
+		replaceAllMessages?: boolean;
 		currentToolCalls?: ToolPart[];
 		status?: "pending" | "running" | "completed" | "error";
 		error?: string;
@@ -168,8 +169,25 @@ export async function completeSession(
 
 	const state: RedisSessionState = JSON.parse(existing);
 
+	// Update the status to completed in Redis FIRST (keep it for 30s for UI to detect)
+	const completedState: RedisSessionState = {
+		...state,
+		status: options?.error ? "error" : "completed",
+		error: options?.error ?? state.error,
+		updatedAt: Date.now(),
+	};
+
+	// Keep the completed session in Redis for 30 seconds so the UI can detect it
+	await redis.setex(key, 30, JSON.stringify(completedState));
+	console.log(
+		`[SESSION-STATE] Marked session ${sessionId} as ${completedState.status} in Redis (30s TTL)`,
+	);
+
 	// Archive to PostgreSQL
 	try {
+		console.log(
+			`[SESSION-STATE] Archiving session ${sessionId} with ${state.messages.length} messages to PostgreSQL`,
+		);
 		await db.insert(opencodeSessionsTable).values({
 			id: sessionId,
 			ticketId: state.ticketId ?? null,
@@ -181,7 +199,9 @@ export async function completeSession(
 			completedAt: new Date(),
 			errorMessage: options?.error ?? state.error ?? null,
 		});
-		console.log(`[SESSION-STATE] Archived session ${sessionId} to PostgreSQL`);
+		console.log(
+			`[SESSION-STATE] Archived session ${sessionId} to PostgreSQL successfully`,
+		);
 	} catch (error) {
 		console.error(
 			`[SESSION-STATE] Failed to archive session ${sessionId}:`,
@@ -194,12 +214,28 @@ export async function completeSession(
 		.map((message) => message.text)
 		.filter(Boolean);
 
+	console.log(
+		`[SESSION-STATE] completeSession: Found ${assistantMessages.length} assistant messages with text for ticket ${state.ticketId}`,
+	);
+	if (state.messages.length > 0) {
+		const lastMsg = state.messages[state.messages.length - 1];
+		if (lastMsg) {
+			console.log(
+				`[SESSION-STATE] Last message parts: ${JSON.stringify(lastMsg.parts)}`,
+			);
+			console.log(`[SESSION-STATE] Last message text: "${lastMsg.text}"`);
+		}
+	}
+
 	if (
 		state.ticketId &&
 		state.sessionType === "ask" &&
 		assistantMessages.length > 0
 	) {
 		const finalText = assistantMessages.join("\n\n");
+		console.log(
+			`[SESSION-STATE] Saving Opencode summary for ticket ${state.ticketId} (length: ${finalText.length})`,
+		);
 		try {
 			await db.insert(ticketRecommendations).values({
 				ticketId: state.ticketId,
@@ -214,10 +250,14 @@ export async function completeSession(
 		}
 	}
 
-	// Clean up Redis
-	await redis.del(key);
-
 	// Clean up active session lookup if ticketId exists
+	// (but keep the session key with completed status for 30s)
+	// We DO NOT delete the active session key here anymore.
+	// We want getAllPendingSessions() to find this session (which is now "completed")
+	// so it can return it to the UI. The UI needs to see "completed" to stop the spinner.
+	// The active key has a TTL (1 hour) but getAllPendingSessions handles stale keys.
+	// Plus, if a new session starts, it overwrites this key.
+	/*
 	if (state.ticketId) {
 		const activeKey = RedisKeys.activeSession(state.ticketId);
 		const activeSessionId = await redis.get(activeKey);
@@ -225,6 +265,7 @@ export async function completeSession(
 			await redis.del(activeKey);
 		}
 	}
+	*/
 
 	// Publish completion event
 	const channel = RedisKeys.updates(sessionId);
@@ -232,7 +273,7 @@ export async function completeSession(
 		channel,
 		JSON.stringify({
 			type: "complete",
-			state: { ...state, status: options?.error ? "error" : "completed" },
+			state: completedState,
 		}),
 	);
 
@@ -373,15 +414,19 @@ export async function getAllPendingSessions(): Promise<RedisSessionState[]> {
 					continue;
 				}
 
-				// Only include sessions that are still pending or running (and fresh)
-				const isPendingOrRunning =
-					state.status === "pending" || state.status === "running";
+				// Include pending, running, AND recently completed/error sessions
+				// (completed sessions are kept in Redis for 30s so UI can detect them)
+				const isActive =
+					state.status === "pending" ||
+					state.status === "running" ||
+					state.status === "completed" ||
+					state.status === "error";
 				const isStale = Date.now() - state.updatedAt > STALE_SESSION_WINDOW_MS;
 
-				if (isPendingOrRunning && !isStale) {
+				if (isActive && !isStale) {
 					sessions.push(state);
-				} else {
-					// Clean up stale active references for completed/error sessions
+				} else if (isStale) {
+					// Clean up stale active references
 					await redis.del(key);
 				}
 			}

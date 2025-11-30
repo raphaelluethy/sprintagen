@@ -44,12 +44,20 @@ interface TicketMetadata {
 }
 
 function extractTextFromParts(parts: Part[]): string {
-	return parts
+	const textParts = parts
 		.filter(
 			(part): part is Extract<Part, { type: "text" }> => part.type === "text",
 		)
-		.map((part) => part.text)
-		.join("\n");
+		.map((part) => part.text);
+
+	const stepFinishParts = parts
+		.filter(
+			(part): part is Extract<Part, { type: "step-finish" }> =>
+				part.type === "step-finish",
+		)
+		.map((part) => part.reason);
+
+	return [...textParts, ...stepFinishParts].join("\n");
 }
 
 function extractReasoningFromParts(parts: Part[]): string {
