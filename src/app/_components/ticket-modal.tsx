@@ -1,6 +1,7 @@
+/** biome-ignore-all lint/nursery/useSortedClasses: <explanation> */
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,38 +50,6 @@ interface OpencodeChatMessage {
 	parts?: MessagePart[];
 	reasoning?: string;
 	sessionId?: string;
-}
-
-/**
- * Session boundary separator component
- * Displays when messages from different Opencode sessions are shown
- */
-function SessionBoundary() {
-	return (
-		<div className="flex items-center gap-3 py-4">
-			<div className="h-px flex-1 bg-border/60" />
-			<div className="flex items-center gap-2 rounded-md border border-border/60 bg-card/30 px-3 py-1.5">
-				<svg
-					aria-hidden="true"
-					className="h-3.5 w-3.5 text-muted-foreground"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path
-						d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						strokeWidth={1.5}
-					/>
-				</svg>
-				<span className="text-muted-foreground text-xs">
-					New Opencode session started
-				</span>
-			</div>
-			<div className="h-px flex-1 bg-border/60" />
-		</div>
-	);
 }
 
 interface TicketModalProps {
@@ -208,7 +177,7 @@ function LiveAnalysisProgress({
 					/>
 				</svg>
 				<span className="font-medium text-foreground text-sm">
-					Analyzing with Opencode...
+					Analyzing with Agent...
 				</span>
 			</div>
 
@@ -243,9 +212,9 @@ function LiveAnalysisProgress({
 					{steps.map((step, index) => (
 						<div
 							className={`flex items-center gap-2 rounded-md border px-3 py-2 transition-all ${index === steps.length - 1 &&
-								(step.status === "running" || step.status === "pending")
-								? "border-foreground/20 bg-foreground/5"
-								: "border-border/60 bg-card/50"
+									(step.status === "running" || step.status === "pending")
+									? "border-foreground/20 bg-foreground/5"
+									: "border-border/60 bg-card/50"
 								}`}
 							key={step.id}
 						>
@@ -280,6 +249,187 @@ const statusStyles: Record<string, string> = {
 	closed: "bg-secondary/40 text-muted-foreground",
 };
 
+function RecommendationsList({
+	ticketId,
+	onChatContext,
+	onAgentContext,
+}: {
+	ticketId: string;
+	onChatContext: (insight: string, date: Date) => void;
+	onAgentContext: (insight: string, date: Date) => void;
+}) {
+	const {
+		data,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+		isLoading,
+		isError,
+	} = api.ticket.getRecommendations.useInfiniteQuery(
+		{ ticketId, limit: 10 },
+		{
+			getNextPageParam: (lastPage) => lastPage.nextCursor,
+		},
+	);
+
+	if (isLoading) {
+		return (
+			<div className="space-y-3">
+				<Skeleton className="h-4 w-full" />
+				<Skeleton className="h-4 w-3/4" />
+				<Skeleton className="h-4 w-5/6" />
+			</div>
+		);
+	}
+
+	if (isError) {
+		return (
+			<div className="flex flex-col items-center justify-center py-12 text-center">
+				<p className="text-destructive text-sm">
+					Failed to load recommendations
+				</p>
+			</div>
+		);
+	}
+
+	const allItems = data?.pages.flatMap((page) => page.items) ?? [];
+
+	if (allItems.length === 0) {
+		return (
+			<div className="flex flex-col items-center justify-center py-12 text-center">
+				<p className="text-muted-foreground text-sm">No recommendations yet</p>
+				<p className="text-muted-foreground/60 text-xs">
+					Click &ldquo;Regenerate&rdquo; to generate AI recommendations or
+					&ldquo;Ask Agent&rdquo; for implementation analysis
+				</p>
+			</div>
+		);
+	}
+
+	// Reverse to show oldest to newest (bottom)
+	const reversedItems = [...allItems].reverse();
+
+	return (
+		<div className="space-y-6">
+			{hasNextPage && (
+				<div className="flex justify-center">
+					<Button
+						disabled={isFetchingNextPage}
+						onClick={() => fetchNextPage()}
+						size="sm"
+						variant="ghost"
+					>
+						{isFetchingNextPage ? "Loading..." : "Load older insights"}
+					</Button>
+				</div>
+			)}
+
+			<div className="relative space-y-8 pl-4 before:absolute before:top-2 before:left-[7px] before:h-[calc(100%-16px)] before:w-px before:bg-border/60">
+				{reversedItems.map((item) => (
+					<div className="relative pl-6" key={item.id}>
+						{/* Timeline dot */}
+						<div className="absolute top-2 left-0 h-3.5 w-3.5 rounded-full border-2 border-background bg-primary ring-4 ring-background" />
+
+						{/* Date header */}
+						<div className="mb-2 flex items-center justify-between">
+							<time className="font-medium text-muted-foreground text-xs">
+								{new Date(item.createdAt).toLocaleString(undefined, {
+									dateStyle: "medium",
+									timeStyle: "short",
+								})}
+							</time>
+							<Button
+								className="h-6 px-2 text-xs"
+								onClick={() => {
+									const parts = [];
+									if (item.recommendedSteps)
+										parts.push(`Steps:\n${item.recommendedSteps}`);
+									if (item.recommendedProgrammer)
+										parts.push(`Assignee: ${item.recommendedProgrammer}`);
+									if (item.opencodeSummary)
+										parts.push(`Analysis:\n${item.opencodeSummary}`);
+									onChatContext(parts.join("\n\n"), item.createdAt);
+								}}
+								size="sm"
+								variant="ghost"
+							>
+								Discuss in Chat
+							</Button>
+							<Button
+								className="h-6 px-2 text-xs"
+								onClick={() => {
+									const parts = [];
+									if (item.recommendedSteps)
+										parts.push(`Steps:\n${item.recommendedSteps}`);
+									if (item.recommendedProgrammer)
+										parts.push(`Assignee: ${item.recommendedProgrammer}`);
+									if (item.opencodeSummary)
+										parts.push(`Analysis:\n${item.opencodeSummary}`);
+									onAgentContext(parts.join("\n\n"), item.createdAt);
+								}}
+								size="sm"
+								variant="ghost"
+							>
+								Discuss with Agent
+							</Button>
+						</div>
+
+						{/* Content Card */}
+						<Card className="border-border/40 bg-card/50">
+							<CardContent className="space-y-4 p-4">
+								{item.recommendedSteps && (
+									<div>
+										<span className="text-muted-foreground text-xs uppercase tracking-wider">
+											Recommended Steps
+										</span>
+										<div className="prose prose-sm prose-invert mt-2 max-w-none prose-code:rounded prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
+											<Markdown>{item.recommendedSteps}</Markdown>
+										</div>
+									</div>
+								)}
+
+								{item.recommendedProgrammer && (
+									<div>
+										<span className="text-muted-foreground text-xs uppercase tracking-wider">
+											Recommended Assignee
+										</span>
+										<p className="mt-1 text-sm">{item.recommendedProgrammer}</p>
+									</div>
+								)}
+
+								{item.opencodeSummary && (
+									<>
+										<div className="h-px bg-border/40" />
+										<div>
+											<span className="text-muted-foreground text-xs uppercase tracking-wider">
+												Agent Analysis
+											</span>
+											<div className="prose prose-sm prose-invert mt-2 max-w-none prose-code:rounded prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
+												<Markdown>{item.opencodeSummary}</Markdown>
+											</div>
+										</div>
+									</>
+								)}
+
+								{item.modelUsed && (
+									<div className="mt-2 flex justify-end">
+										<Badge
+											className="h-5 px-1.5 font-normal text-[10px]"
+											variant="outline"
+										>
+											{item.modelUsed}
+										</Badge>
+									</div>
+								)}
+							</CardContent>
+						</Card>
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
+
 export function TicketModal({
 	ticket,
 	open,
@@ -306,6 +456,12 @@ export function TicketModal({
 	// Track if we've already requested a session for this modal open
 	const [sessionRequested, setSessionRequested] = useState(false);
 	const completionNotifiedRef = useRef(false);
+
+	// Chat context state
+	const [replyingToInsight, setReplyingToInsight] = useState<{
+		insight: string;
+		date: Date;
+	} | null>(null);
 
 	// Get the pending session ID for this ticket (if any)
 	const pendingSessionId = ticket?.id ? getPendingSessionId(ticket.id) : null;
@@ -387,8 +543,6 @@ export function TicketModal({
 		...(opencodeData?.messages ?? []),
 		...optimisticOpencodeMessages,
 	];
-	const currentSessionId =
-		opencodeData?.currentSessionId || opencodeChatSessionId;
 	// Track if this is a freshly created session (e.g., after server restart)
 	const _isNewOpencodeSession = opencodeData?.isNewSession ?? false;
 
@@ -529,18 +683,32 @@ export function TicketModal({
 
 	const handleSendMessage = () => {
 		if (!chatInput.trim() || !ticket?.id) return;
+
+		let messageToSend = chatInput.trim();
+		if (replyingToInsight) {
+			messageToSend = `Context (Insight from ${replyingToInsight.date.toLocaleString()}):\n> ${replyingToInsight.insight.replace(/\n/g, "\n> ")}\n\n${messageToSend}`;
+			setReplyingToInsight(null);
+		}
+
 		chatMutation.mutate({
 			ticketId: ticket.id,
-			message: chatInput.trim(),
+			message: messageToSend,
 		});
 	};
 
 	const handleSendOpencodeMessage = () => {
 		if (!opencodeChatInput.trim() || !ticket?.id || !opencodeChatSessionId)
 			return;
+
+		let messageToSend = opencodeChatInput.trim();
+		if (replyingToInsight) {
+			messageToSend = `Context (Insight from ${replyingToInsight.date.toLocaleString()}):\n> ${replyingToInsight.insight.replace(/\n/g, "\n> ")}\n\n${messageToSend}`;
+			setReplyingToInsight(null);
+		}
+
 		sendOpencodeMutation.mutate({
 			ticketId: ticket.id,
-			message: opencodeChatInput.trim(),
+			message: messageToSend,
 			sessionId: opencodeChatSessionId,
 		});
 	};
@@ -558,7 +726,6 @@ export function TicketModal({
 		});
 	};
 
-	const latestRecommendation = fullTicket?.recommendations?.[0];
 	const latestRanking = fullTicket?.rankings?.[0];
 	const opencodeAvailable = opencodeStatusQuery.data?.available ?? false;
 
@@ -631,7 +798,7 @@ export function TicketModal({
 							Chat
 						</TabsTrigger>
 						<TabsTrigger className="text-xs" value="opencode">
-							Opencode
+							Agent
 						</TabsTrigger>
 					</TabsList>
 
@@ -775,7 +942,7 @@ export function TicketModal({
 									size="sm"
 									variant="outline"
 								>
-									{askOpencodeInFlight ? "Analyzing..." : "Ask Opencode"}
+									{askOpencodeInFlight ? "Analyzing..." : "Ask Agent"}
 									{!opencodeAvailable && (
 										<span className="ml-1 text-muted-foreground text-xs">
 											(unavailable)
@@ -802,73 +969,25 @@ export function TicketModal({
 								</div>
 							) : askOpencodeInFlight ? (
 								<LiveAnalysisProgress steps={liveAnalysisSteps} />
-							) : latestRecommendation ? (
-								<div className="space-y-6">
-									{latestRecommendation.recommendedSteps && (
-										<div>
-											<span className="text-muted-foreground text-xs uppercase tracking-wider">
-												Recommended Steps
-											</span>
-											<div className="prose prose-sm prose-invert mt-3 max-w-none prose-code:rounded prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
-												<Markdown>
-													{latestRecommendation.recommendedSteps}
-												</Markdown>
-											</div>
-										</div>
-									)}
-
-									{latestRecommendation.recommendedProgrammer && (
-										<div>
-											<span className="text-muted-foreground text-xs uppercase tracking-wider">
-												Recommended Assignee
-											</span>
-											<p className="mt-2 text-sm">
-												{latestRecommendation.recommendedProgrammer}
-											</p>
-										</div>
-									)}
-
-									{latestRecommendation.opencodeSummary && (
-										<>
-											<div className="h-px bg-border/40" />
-											<div>
-												<span className="text-muted-foreground text-xs uppercase tracking-wider">
-													Opencode Analysis
-												</span>
-												<div className="prose prose-sm prose-invert mt-3 max-w-none prose-code:rounded prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
-													<Markdown>
-														{latestRecommendation.opencodeSummary}
-													</Markdown>
-												</div>
-											</div>
-										</>
-									)}
-
-									<p className="text-muted-foreground text-xs">
-										Generated{" "}
-										{new Date(latestRecommendation.createdAt).toLocaleString()}
-										{latestRecommendation.modelUsed &&
-											` using ${latestRecommendation.modelUsed}`}
-									</p>
-								</div>
 							) : (
-								<div className="flex flex-col items-center justify-center py-12 text-center">
-									<p className="text-muted-foreground text-sm">
-										No recommendations yet
-									</p>
-									<p className="text-muted-foreground/60 text-xs">
-										Click &ldquo;Regenerate&rdquo; to generate AI
-										recommendations or &ldquo;Ask Opencode&rdquo; for
-										implementation analysis
-									</p>
-								</div>
+								<RecommendationsList
+									onAgentContext={(insight, date) => {
+										setActiveTab("opencode");
+										setReplyingToInsight({ insight, date });
+									}}
+									onChatContext={(insight, date) => {
+										setActiveTab("chat");
+										setReplyingToInsight({ insight, date });
+									}}
+									ticketId={ticket.id}
+								/>
 							)}
 
 							{!askOpencodeInFlight && (
 								<div className="space-y-3">
 									<div className="flex items-center justify-between">
 										<span className="text-muted-foreground text-xs uppercase tracking-wider">
-											Past Opencode Sessions
+											Past Agent Sessions
 										</span>
 										{sessionHistoryQuery.isLoading && (
 											<span className="text-muted-foreground text-xs">
@@ -879,11 +998,11 @@ export function TicketModal({
 
 									{sessionHistoryQuery.isError ? (
 										<p className="text-destructive text-xs">
-											Unable to load previous Opencode sessions.
+											Unable to load previous Agent sessions.
 										</p>
 									) : archivedSessions.length === 0 ? (
 										<p className="text-muted-foreground text-sm">
-											No previous Opencode sessions for this ticket.
+											No previous Agent sessions for this ticket.
 										</p>
 									) : (
 										<div className="space-y-3">
@@ -935,8 +1054,8 @@ export function TicketModal({
 																		>
 																			<div
 																				className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${isUser
-																					? "bg-foreground text-background"
-																					: "border border-border/60 bg-card/50"
+																						? "bg-foreground text-background"
+																						: "border border-border/60 bg-card/50"
 																					}`}
 																			>
 																				{!isUser && hasReasoning && (
@@ -1018,8 +1137,8 @@ export function TicketModal({
 											>
 												<div
 													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${msg.role === "user"
-														? "bg-foreground text-background"
-														: "border border-border/60 bg-card/50"
+															? "bg-foreground text-background"
+															: "bg-card/50"
 														}`}
 												>
 													<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
@@ -1049,6 +1168,35 @@ export function TicketModal({
 
 							{/* Chat input */}
 							<div className="mt-4 space-y-2">
+								{replyingToInsight && (
+									<div className="flex items-center justify-between rounded-md border border-primary/20 bg-primary/10 px-3 py-2">
+										<span className="text-primary text-xs">
+											Discussing Insight from{" "}
+											{replyingToInsight.date.toLocaleString()}
+										</span>
+										<Button
+											className="h-auto p-0 text-muted-foreground hover:text-foreground"
+											onClick={() => setReplyingToInsight(null)}
+											size="sm"
+											variant="ghost"
+										>
+											<svg
+												aria-hidden="true"
+												className="h-4 w-4"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													d="M6 18L18 6M6 6l12 12"
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth={2}
+												/>
+											</svg>
+										</Button>
+									</div>
+								)}
 								<div className="flex gap-2">
 									<Textarea
 										className="min-h-11 resize-none text-sm"
@@ -1097,47 +1245,45 @@ export function TicketModal({
 							{!opencodeAvailable ? (
 								<div className="flex flex-col items-center justify-center py-12 text-center">
 									<p className="text-muted-foreground text-sm">
-										Opencode is not available
+										Agent is not available
 									</p>
 									<p className="text-muted-foreground/60 text-xs">
-										Make sure the Opencode server is running and configured
+										Make sure the Agent server is running and configured
 									</p>
 								</div>
 							) : (
 								<>
 									{/* Opencode chat messages */}
 									<ScrollArea className="min-h-0 flex-1">
-										<div className="space-y-3 pr-4">
+										<div className="space-y-6 pr-4">
 											{startSessionMutation.isPending ||
 												opencodeChatQuery.isLoading ? (
-												<div className="space-y-3">
-													<div className="flex items-center gap-2">
-														<svg
-															aria-hidden="true"
-															className="h-4 w-4 animate-spin text-muted-foreground"
-															fill="none"
-															viewBox="0 0 24 24"
-														>
-															<circle
-																className="opacity-25"
-																cx="12"
-																cy="12"
-																r="10"
-																stroke="currentColor"
-																strokeWidth="4"
-															/>
-															<path
-																className="opacity-75"
-																d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-																fill="currentColor"
-															/>
-														</svg>
-														<span className="text-muted-foreground text-sm">
-															{startSessionMutation.isPending
-																? "Creating new session..."
-																: "Loading messages..."}
-														</span>
-													</div>
+												<div className="flex items-center gap-2 py-8">
+													<svg
+														aria-hidden="true"
+														className="h-4 w-4 animate-spin text-muted-foreground"
+														fill="none"
+														viewBox="0 0 24 24"
+													>
+														<circle
+															className="opacity-25"
+															cx="12"
+															cy="12"
+															r="10"
+															stroke="currentColor"
+															strokeWidth="4"
+														/>
+														<path
+															className="opacity-75"
+															d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+															fill="currentColor"
+														/>
+													</svg>
+													<span className="text-muted-foreground text-sm">
+														{startSessionMutation.isPending
+															? "Creating new session..."
+															: "Loading messages..."}
+													</span>
 												</div>
 											) : opencodeMessages.length === 0 ? (
 												<div className="flex flex-col items-center justify-center py-12 text-center">
@@ -1145,104 +1291,108 @@ export function TicketModal({
 														No messages yet
 													</p>
 													<p className="text-muted-foreground/60 text-xs">
-														Start a conversation with Opencode about this ticket
+														Start a conversation with Agent about this ticket
 													</p>
 												</div>
 											) : (
-												opencodeMessages.map((msg, index) => {
-													const isUser = msg.role === "user";
-													const toolParts =
-														msg.parts?.filter(
-															(p): p is ToolPart => p.type === "tool",
-														) ?? [];
-													const reasoningParts =
-														msg.parts?.filter(
-															(p): p is ReasoningPart => p.type === "reasoning",
-														) ?? [];
-													const hasReasoning =
-														reasoningParts.length > 0 || msg.reasoning;
-													const reasoningText =
-														msg.reasoning ??
-														reasoningParts
-															.map((p) => p.text)
-															.join("\n")
-															.trim();
+												<div className="relative space-y-4">
+													<div className="absolute left-[7px] top-2 h-[calc(100%-16px)] w-px bg-border/60" />
+													{opencodeMessages.map((msg) => {
+														const isUser = msg.role === "user";
+														const toolParts =
+															msg.parts?.filter(
+																(p): p is ToolPart => p.type === "tool",
+															) ?? [];
+														const reasoningParts =
+															msg.parts?.filter(
+																(p): p is ReasoningPart =>
+																	p.type === "reasoning",
+															) ?? [];
+														const hasReasoning =
+															reasoningParts.length > 0 || msg.reasoning;
+														const reasoningText =
+															msg.reasoning ??
+															reasoningParts
+																.map((p) => p.text)
+																.join("\n")
+																.trim();
 
-													// Detect session boundary (sessionId changed from previous message)
-													const prevMessage =
-														index > 0 ? opencodeMessages[index - 1] : null;
-													const showSessionBoundary =
-														msg.sessionId &&
-														prevMessage?.sessionId &&
-														msg.sessionId !== prevMessage.sessionId;
-
-													// Check if this message is from a legacy session (different from current)
-													const isLegacySession =
-														currentSessionId &&
-														msg.sessionId &&
-														msg.sessionId !== currentSessionId;
-
-													return (
-														<div key={msg.id}>
-															{/* Session boundary separator */}
-															{showSessionBoundary && <SessionBoundary />}
-
-															<div
-																className={`flex ${isUser ? "justify-end" : "justify-start"}`}
-															>
+														return (
+															<div className="relative pl-6" key={msg.id}>
+																{/* Timeline dot */}
 																<div
-																	className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${isUser
-																		? "bg-foreground text-background"
-																		: "border border-border/60 bg-card/50"
-																		} ${isLegacySession ? "opacity-60" : ""}`}
-																>
-																	{/* Reasoning section (collapsible) for assistant messages */}
-																	{!isUser && hasReasoning && (
-																		<OpencodeReasoningDisplay
-																			reasoning={reasoningText}
-																		/>
-																	)}
+																	className={`absolute left-0 top-2 h-3.5 w-3.5 rounded-full border-2 border-background ring-4 ring-background ${isUser ? "bg-foreground" : "bg-primary"
+																		}`}
+																/>
 
-																	{/* Tool calls (for assistant messages) */}
-																	{!isUser && toolParts.length > 0 && (
-																		<div className="mb-3">
-																			{toolParts.map((tool) => (
-																				<OpencodeToolCallDisplay
-																					key={tool.id}
-																					tool={tool}
-																				/>
-																			))}
-																		</div>
-																	)}
-
-																	{/* Text content */}
-																	{msg.text && (
-																		<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
-																			<Markdown>{msg.text}</Markdown>
-																		</div>
-																	)}
-
-																	{/* Timestamp and model badge */}
-																	<div className="mt-1 flex items-center gap-2 text-xs tabular-nums opacity-50">
-																		<span>
-																			{new Date(
-																				msg.createdAt,
-																			).toLocaleTimeString()}
-																		</span>
-																		{msg.model && (
-																			<Badge
-																				className="h-4 px-1 font-normal text-[10px]"
-																				variant="outline"
-																			>
-																				{msg.model}
-																			</Badge>
+																{/* Date header */}
+																<div className="mb-2 flex items-center gap-2">
+																	<time className="font-medium text-muted-foreground text-xs">
+																		{new Date(msg.createdAt).toLocaleString(
+																			undefined,
+																			{
+																				dateStyle: "medium",
+																				timeStyle: "short",
+																			},
 																		)}
-																	</div>
+																	</time>
+																	<span className="text-muted-foreground text-xs uppercase tracking-wider">
+																		{isUser ? "You" : "Agent"}
+																	</span>
+																	{msg.model && (
+																		<Badge
+																			className="h-5 px-1.5 font-normal text-[10px] text-foreground"
+																			variant="secondary"
+																		>
+																			{msg.model}
+																		</Badge>
+																	)}
 																</div>
+
+																{/* Content Card */}
+																<Card className="border-border/40 bg-card/50">
+																	<CardContent className="space-y-1 px-3 py-1.5">
+																		{/* Reasoning section (collapsible) for assistant messages */}
+																		{!isUser && hasReasoning && (
+																			<OpencodeReasoningDisplay
+																				reasoning={reasoningText}
+																			/>
+																		)}
+
+																		{/* Tool calls (for assistant messages) */}
+																		{!isUser && toolParts.length > 0 && (
+																			<div>
+																				<span className="text-muted-foreground text-xs uppercase tracking-wider">
+																					Tool Calls
+																				</span>
+																				<div className="mt-1 space-y-1">
+																					{toolParts.map((tool) => (
+																						<OpencodeToolCallDisplay
+																							key={tool.id}
+																							tool={tool}
+																						/>
+																					))}
+																				</div>
+																			</div>
+																		)}
+
+																		{/* Text content */}
+																		{!isUser &&
+																			toolParts.length > 0 &&
+																			msg.text && (
+																				<div className="h-px bg-border/40" />
+																			)}
+																		{msg.text && (
+																			<div className="prose prose-sm prose-invert max-w-none prose-p:my-0 prose-code:rounded prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
+																				<Markdown>{msg.text}</Markdown>
+																			</div>
+																		)}
+																	</CardContent>
+																</Card>
 															</div>
-														</div>
-													);
-												})
+														);
+													})}
+												</div>
 											)}
 											{sendOpencodeMutation.isPending && (
 												<div className="flex justify-start">
@@ -1261,6 +1411,35 @@ export function TicketModal({
 
 									{/* Opencode chat input */}
 									<div className="mt-4 space-y-2">
+										{replyingToInsight && (
+											<div className="flex items-center justify-between rounded-md border border-primary/20 bg-primary/10 px-3 py-2">
+												<span className="text-primary text-xs">
+													Discussing Insight from{" "}
+													{replyingToInsight.date.toLocaleString()}
+												</span>
+												<Button
+													className="h-auto p-0 text-muted-foreground hover:text-foreground"
+													onClick={() => setReplyingToInsight(null)}
+													size="sm"
+													variant="ghost"
+												>
+													<svg
+														aria-hidden="true"
+														className="h-4 w-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+													>
+														<path
+															d="M6 18L18 6M6 6l12 12"
+															strokeLinecap="round"
+															strokeLinejoin="round"
+															strokeWidth={2}
+														/>
+													</svg>
+												</Button>
+											</div>
+										)}
 										<div className="flex gap-2">
 											<Textarea
 												className="min-h-11 resize-none text-sm"
@@ -1279,7 +1458,7 @@ export function TicketModal({
 												placeholder={
 													startSessionMutation.isPending
 														? "Starting session..."
-														: "Ask Opencode about this ticket..."
+														: "Ask Agent about this ticket..."
 												}
 												value={opencodeChatInput}
 											/>

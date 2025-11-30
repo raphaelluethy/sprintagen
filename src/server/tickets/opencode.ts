@@ -118,7 +118,10 @@ function mapToOpencodeChatMessage(
 	}
 
 	const parts = msg.parts ?? [];
-	console.log(`[OPENCODE] Processing message ${msg.info.id} parts:`, JSON.stringify(parts, null, 2));
+	console.log(
+		`[OPENCODE] Processing message ${msg.info.id} parts:`,
+		JSON.stringify(parts, null, 2),
+	);
 	const reasoning = extractReasoningFromParts(parts);
 	return {
 		id: msg.info.id,

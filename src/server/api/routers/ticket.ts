@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import dedent from "dedent";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
 	analyzeWithAI,
@@ -420,6 +420,44 @@ export const ticketRouter = createTRPCRouter({
 		}),
 
 	/**
+	 * Get recommendations for a ticket with pagination
+	 */
+	getRecommendations: publicProcedure
+		.input(
+			z.object({
+				ticketId: z.string(),
+				limit: z.number().min(1).max(50).default(10),
+				cursor: z.date().optional(),
+			}),
+		)
+		.query(async ({ ctx, input }) => {
+			const { ticketId, limit, cursor } = input;
+
+			const items = await ctx.db.query.ticketRecommendations.findMany({
+				where: and(
+					eq(ticketRecommendations.ticketId, ticketId),
+					cursor ? desc(ticketRecommendations.createdAt) : undefined,
+					cursor
+						? sql`${ticketRecommendations.createdAt} < ${cursor}`
+						: undefined,
+				),
+				orderBy: desc(ticketRecommendations.createdAt),
+				limit: limit + 1,
+			});
+
+			let nextCursor: typeof cursor | undefined;
+			if (items.length > limit) {
+				const nextItem = items.pop();
+				nextCursor = nextItem?.createdAt;
+			}
+
+			return {
+				items,
+				nextCursor,
+			};
+		}),
+
+	/**
 	 * Rank a set of tickets using AI
 	 */
 	rankTickets: publicProcedure
@@ -729,16 +767,20 @@ export const ticketRouter = createTRPCRouter({
 	 */
 	getSessionHistory: publicProcedure
 		.input(z.object({ ticketId: z.string() }))
-		.query(async (): Promise<{
-			messages: OpencodeChatMessage[];
-			sessionId: string;
-			status: "completed" | "running" | "error" | "pending";
-			createdAt: Date;
-		}[]> => {
-			// With Redis removed, we don't have historical session tracking yet.
-			// Return empty array for now.
-			return [];
-		}),
+		.query(
+			async (): Promise<
+				{
+					messages: OpencodeChatMessage[];
+					sessionId: string;
+					status: "completed" | "running" | "error" | "pending";
+					createdAt: Date;
+				}[]
+			> => {
+				// With Redis removed, we don't have historical session tracking yet.
+				// Return empty array for now.
+				return [];
+			},
+		),
 
 	/**
 	 * Ask Opencode about implementing a ticket

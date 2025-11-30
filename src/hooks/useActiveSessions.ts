@@ -67,12 +67,8 @@ export function useActiveSessions(): UseActiveSessionsResult {
 	useEffect(() => {
 		if (pendingInquiriesQuery.data) {
 			const data = pendingInquiriesQuery.data as unknown as PendingInquiry[];
-			const newPendingIds = new Set(
-				data.map((p) => p.ticketId),
-			);
-			const newSessionMap = new Map(
-				data.map((p) => [p.ticketId, p.sessionId]),
-			);
+			const newPendingIds = new Set(data.map((p) => p.ticketId));
+			const newSessionMap = new Map(data.map((p) => [p.ticketId, p.sessionId]));
 
 			// Only update if changed to prevent unnecessary re-renders
 			setPendingAskTicketIds((prev) => {

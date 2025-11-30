@@ -1,9 +1,4 @@
-import type {
-	Message,
-	Part,
-	SessionStatus,
-	ToolPart,
-} from "@opencode-ai/sdk";
+import type { Message, Part, SessionStatus, ToolPart } from "@opencode-ai/sdk";
 import { useMemo } from "react";
 import { api } from "@/trpc/react";
 
@@ -73,11 +68,7 @@ export function useOpencodeStream(
 		return query.data?.status ?? { type: "idle" };
 	}, [query.data?.status]);
 
-	const status = useMemo(():
-		| "pending"
-		| "running"
-		| "completed"
-		| "error" => {
+	const status = useMemo((): "pending" | "running" | "completed" | "error" => {
 		if (query.isError) return "error";
 		if (query.isLoading && !query.data) return "pending";
 
@@ -92,7 +83,13 @@ export function useOpencodeStream(
 			default:
 				return "pending";
 		}
-	}, [query.isError, query.isLoading, query.data, sessionStatus, messages.length]);
+	}, [
+		query.isError,
+		query.isLoading,
+		query.data,
+		sessionStatus,
+		messages.length,
+	]);
 
 	return {
 		messages,
@@ -141,7 +138,6 @@ export function useOpencodeMessages(sessionId: string | null) {
 						const mimeType = p.mimeType ?? "application/octet-stream";
 						return `[File: ${mimeType}]\n${content}`;
 					});
-
 
 				const reasoningParts = m.parts
 					.filter(
