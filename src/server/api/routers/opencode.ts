@@ -823,7 +823,7 @@ export const opencodeRouter = createTRPCRouter({
 			// No active session
 			return {
 				messages: [],
-				currentSessionId: null,
+				currentSessionId: undefined,
 				status: { type: "idle" as const },
 				toolCalls: [],
 				isNewSession: true,
@@ -858,11 +858,12 @@ export const opencodeRouter = createTRPCRouter({
 			const store = getOpencodeStore();
 			const client = getOpencodeClient();
 
-			let sessionId = input.sessionId;
+			let sessionId: string | undefined = input.sessionId ?? undefined;
 
 			// Get or create session
 			if (!sessionId) {
-				sessionId = await store.getActiveSessionForTicket(input.ticketId);
+				const active = await store.getActiveSessionForTicket(input.ticketId);
+				sessionId = active ?? undefined;
 			}
 
 			if (!sessionId) {

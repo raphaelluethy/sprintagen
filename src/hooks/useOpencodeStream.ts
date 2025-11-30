@@ -80,8 +80,8 @@ export function useOpencodeStream(
 	const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const reconnectAttempts = useRef(0);
 	const maxReconnectAttempts = 5;
+	const pendingPartsRef = useRef<Record<string, Part[]>>({});
 
-	// Compute tool calls from messages - memoized to prevent infinite re-renders
 	const toolCalls = useMemo(
 		() =>
 			messages
@@ -95,75 +95,143 @@ export function useOpencodeStream(
 		[messages],
 	);
 
+	const applyPartUpdate = useCallback(
+		(parts: Part[], incoming: Part & { delta?: string }): Part[] => {
+			const { delta, ...incomingRest } = incoming as Part & { delta?: string };
+			const idx = parts.findIndex((p) => p.id === incomingRest.id);
+
+			if (idx >= 0) {
+				const existing = parts[idx];
+				if (!existing) return parts;
+				if (existing.type === "text") {
+					const baseText =
+						(existing as { text?: string }).text ??
+						(incomingRest as { text?: string }).text ??
+						"";
+					const text =
+						delta !== undefined
+							? `${baseText}${delta}`
+							: ((incomingRest as { text?: string }).text ?? baseText);
+					const merged = { ...existing, ...incomingRest, text } as Part;
+					const next = [...parts];
+					next[idx] = merged;
+					return next;
+				}
+
+				const merged = { ...existing, ...incomingRest } as Part;
+				const next = [...parts];
+				next[idx] = merged;
+				return next;
+			}
+
+			let newPart: Part = incomingRest as Part;
+			if (incomingRest.type === "text") {
+				const baseText = (incomingRest as { text?: string }).text ?? "";
+				const text = delta !== undefined ? `${baseText}${delta}` : baseText;
+				newPart = { ...incomingRest, text } as Part;
+			}
+
+			const next = [...parts, newPart];
+			next.sort((a, b) => a.id.localeCompare(b.id));
+			return next;
+		},
+		[],
+	);
+
 	/**
 	 * Handle incoming SDK events
 	 */
-	const handleEvent = useCallback((event: SdkEvent) => {
-		switch (event.type) {
-			case "message.updated": {
-				const msg = event.properties.info;
-				setMessages((prev) => {
-					// Find existing message or add new
-					const idx = prev.findIndex((m) => m.info.id === msg.id);
-					if (idx >= 0) {
-						// Update existing message
-						const updated = [...prev];
-						updated[idx] = { ...updated[idx], info: msg };
-						return updated;
-					}
-					// Add new message
-					return [...prev, { info: msg, parts: [] }].sort((a, b) =>
-						a.info.id.localeCompare(b.info.id),
-					);
-				});
-				break;
-			}
+	const handleEvent = useCallback(
+		(event: SdkEvent) => {
+			switch (event.type) {
+				case "message.updated": {
+					const msg = event.properties.info;
+					setMessages((prev) => {
+						const idx = prev.findIndex((m) => m.info.id === msg.id);
+						const queued = pendingPartsRef.current[msg.id];
 
-			case "message.part.updated": {
-				const part = event.properties.part;
-				setMessages((prev) => {
-					const msgIdx = prev.findIndex((m) => m.info.id === part.messageID);
-					if (msgIdx < 0) {
-						// Message not found - may come later
-						return prev;
-					}
+						if (idx >= 0) {
+							const updated = [...prev];
+							const existing = {
+								...updated[idx],
+								info: msg,
+							} as MessageWithParts;
+							let parts = existing.parts ?? [];
+							if (queued && queued.length > 0) {
+								parts = queued.reduce(
+									(acc, part) => applyPartUpdate(acc, part),
+									parts,
+								);
+								delete pendingPartsRef.current[msg.id];
+							}
+							updated[idx] = { ...existing, parts };
+							return updated;
+						}
 
-					const updated = [...prev];
-					const msg = { ...updated[msgIdx] };
-					const partIdx = msg.parts.findIndex((p) => p.id === part.id);
+						let initialParts: Part[] = queued ?? [];
+						if (queued) {
+							delete pendingPartsRef.current[msg.id];
+						}
 
-					if (partIdx >= 0) {
-						// Update existing part
-						msg.parts = [...msg.parts];
-						msg.parts[partIdx] = part;
-					} else {
-						// Add new part
-						msg.parts = [...msg.parts, part].sort((a, b) =>
-							a.id.localeCompare(b.id),
+						return [...prev, { info: msg, parts: initialParts }].sort((a, b) =>
+							a.info.id.localeCompare(b.info.id),
 						);
-					}
+					});
+					break;
+				}
 
-					updated[msgIdx] = msg;
-					return updated;
-				});
-				break;
+				case "message.part.updated": {
+					const deltaFromEvent = (event.properties as { delta?: string }).delta;
+					const deltaFromPart = (event.properties.part as { delta?: string })
+						.delta;
+					const incomingPart = {
+						...event.properties.part,
+						...(deltaFromEvent !== undefined
+							? { delta: deltaFromEvent }
+							: deltaFromPart !== undefined
+								? { delta: deltaFromPart }
+								: {}),
+					} as Part & { delta?: string };
+					setMessages((prev) => {
+						const msgIdx = prev.findIndex(
+							(m) => m.info.id === incomingPart.messageID,
+						);
+						if (msgIdx < 0) {
+							const existingQueue =
+								pendingPartsRef.current[incomingPart.messageID] ?? [];
+							pendingPartsRef.current[incomingPart.messageID] = applyPartUpdate(
+								existingQueue,
+								incomingPart,
+							);
+							return prev;
+						}
+
+						const updated = [...prev];
+						const msg = { ...updated[msgIdx] } as MessageWithParts;
+						msg.parts = applyPartUpdate(msg.parts ?? [], incomingPart);
+						updated[msgIdx] = msg;
+						return updated;
+					});
+					break;
+				}
+
+				case "session.status": {
+					setStatus(event.properties.status);
+					break;
+				}
+
+				case "session.idle": {
+					setStatus({ type: "idle" });
+					break;
+				}
+
+				default:
+					// Other events can be handled as needed
+					break;
 			}
-
-			case "session.status": {
-				setStatus(event.properties.status);
-				break;
-			}
-
-			case "session.idle": {
-				setStatus({ type: "idle" });
-				break;
-			}
-
-			default:
-				// Other events can be handled as needed
-				break;
-		}
-	}, []);
+		},
+		[applyPartUpdate],
+	);
 
 	useEffect(() => {
 		if (!sessionId) {

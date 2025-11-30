@@ -111,9 +111,15 @@ export class OpencodeRedisStore {
 				);
 				break;
 
-			case "message.part.updated":
-				await this.upsertPart(event.properties.part);
+			case "message.part.updated": {
+				const rawPart = event.properties.part as Part & { delta?: string };
+				const delta =
+					(event.properties as { delta?: string }).delta ?? rawPart.delta;
+				const partWithDelta =
+					delta !== undefined ? { ...rawPart, delta } : rawPart;
+				await this.upsertPart(partWithDelta);
 				break;
+			}
 
 			case "message.part.removed":
 				await this.deletePart(
@@ -322,22 +328,39 @@ export class OpencodeRedisStore {
 	// ========================================================================
 
 	async upsertPart(part: Part): Promise<void> {
-		const key = OpencodeKeys.part(part.messageID, part.id);
-		const data = JSON.stringify(part);
+		const { delta: _delta, ...rest } = part as Part & { delta?: string };
+		const existing = await this.getPart(part.messageID, part.id);
+
+		let mergedPart: Part = { ...(existing ?? {}), ...rest } as Part;
+		const delta = (part as { delta?: string }).delta;
+
+		if (mergedPart.type === "text") {
+			const baseText = (existing as { text?: string } | null)?.text ?? "";
+			const incomingText = (part as { text?: string }).text ?? "";
+			const text =
+				delta !== undefined ? `${baseText}${delta}` : incomingText || baseText;
+			mergedPart = { ...mergedPart, text };
+		}
+
+		const key = OpencodeKeys.part(mergedPart.messageID, mergedPart.id);
+		const data = JSON.stringify(mergedPart);
 		const success = await redis.set(key, data);
 
 		// Log with type-specific details
-		let details = `type=${part.type}`;
-		if (part.type === "text") {
-			const textPart = part as { text: string };
+		let details = `type=${mergedPart.type}`;
+		if (mergedPart.type === "text") {
+			const textPart = mergedPart as { text: string };
 			details += `, text_len=${textPart.text.length}`;
-		} else if (part.type === "tool") {
-			const toolPart = part as { tool: string; state: { status: string } };
+		} else if (mergedPart.type === "tool") {
+			const toolPart = mergedPart as {
+				tool: string;
+				state: { status: string };
+			};
 			details += `, tool=${toolPart.tool}, status=${toolPart.state.status}`;
 		}
 
 		console.log(
-			`[OC-STORE] Upserted part ${part.id} | msg=${part.messageID} | ${details} | key=${key} | success=${success} | size=${data.length}`,
+			`[OC-STORE] Upserted part ${mergedPart.id} | msg=${mergedPart.messageID} | ${details} | key=${key} | success=${success} | size=${data.length}`,
 		);
 	}
 

@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import type { ToolPart, ToolState } from "@/server/tickets/opencode";
+import type { ToolPart } from "@/server/tickets/opencode";
+
+type ToolState = ToolPart["state"];
 
 // Reasoning display component
 export function OpencodeReasoningDisplay({ reasoning }: { reasoning: string }) {

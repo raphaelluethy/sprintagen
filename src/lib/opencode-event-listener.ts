@@ -8,12 +8,14 @@
 import { existsSync } from "node:fs";
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Event, GlobalEvent } from "@opencode-ai/sdk";
+import type { Event, GlobalEvent, Part } from "@opencode-ai/sdk";
 import { isRedisAvailable, redis } from "@/server/redis";
 import { getOpencodeStore, OpencodeKeys } from "@/server/redis/opencode-store";
 import { getOpencodeClient } from "./opencode-client";
 
 const logsDir = join(process.cwd(), "logs");
+const lastLoggedEventKey = new Map<string, string>();
+const finalSnapshotLogged = new Set<string>();
 
 /**
  * Ensure logs directory exists
@@ -75,6 +77,13 @@ async function logEventToFile(
 		// Initialize file with header if needed
 		await initLogFile(filepath, sessionId, ticketId);
 
+		const serialized = JSON.stringify(event);
+		const lastKey = lastLoggedEventKey.get(sessionId);
+		if (lastKey === serialized) {
+			return; // Skip duplicate consecutive events for this session
+		}
+		lastLoggedEventKey.set(sessionId, serialized);
+
 		const timestamp = new Date().toISOString();
 		let content = `\n## ${timestamp} - ${event.type}\n\n`;
 
@@ -129,6 +138,56 @@ async function logEventToFile(
 	} catch (error) {
 		console.error(
 			"[EVENT-LISTENER] Failed to write to log file:",
+			error instanceof Error ? error.message : error,
+		);
+	}
+}
+
+async function logFinalSessionSnapshot(
+	sessionId: string,
+	directory: string,
+	ticketId?: string,
+): Promise<void> {
+	if (finalSnapshotLogged.has(sessionId)) {
+		return;
+	}
+	try {
+		const client = getOpencodeClient();
+		const store = getOpencodeStore();
+		const sessionRes = await client.session.get({ path: { id: sessionId } });
+		const messagesRes = await client.session.messages({
+			path: { id: sessionId },
+		});
+
+		// Persist the final state into Redis to ensure full-text hydration
+		if (messagesRes.data) {
+			for (const message of messagesRes.data) {
+				await store.upsertMessage(message.info);
+				for (const part of message.parts) {
+					await store.upsertPart(part as Part & { delta?: string });
+				}
+			}
+		}
+		if (sessionRes.data) {
+			await store.upsertSession(sessionRes.data);
+		}
+
+		await ensureLogsDir();
+		const filepath = getLogFilePath(sessionId, ticketId);
+		await initLogFile(filepath, sessionId, ticketId);
+
+		const snapshot = {
+			directory,
+			session: sessionRes.data ?? null,
+			messages: messagesRes.data ?? [],
+		};
+
+		const content = `\n## Final Session Snapshot\n\n\`\`\`json\n${JSON.stringify(snapshot, null, 2)}\n\`\`\`\n`;
+		await appendFile(filepath, content, "utf-8");
+		finalSnapshotLogged.add(sessionId);
+	} catch (error) {
+		console.error(
+			"[EVENT-LISTENER] Failed to write final session snapshot:",
 			error instanceof Error ? error.message : error,
 		);
 	}
@@ -333,6 +392,9 @@ class OpencodeEventListener {
 			// Log event to file for debugging
 			if (sessionId) {
 				await logEventToFile(sessionId, event, ticketId);
+				if (event.type === "session.idle") {
+					await logFinalSessionSnapshot(sessionId, directory, ticketId);
+				}
 			}
 
 			// Publish to Redis pub/sub for real-time subscriptions

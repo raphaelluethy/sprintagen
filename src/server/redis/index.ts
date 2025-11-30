@@ -40,7 +40,8 @@ function getRedisClient(): Redis | null {
 		});
 
 		redisClient.on("error", (err) => {
-			if (err.code === "ECONNREFUSED") {
+			const code = (err as { code?: string }).code;
+			if (code === "ECONNREFUSED") {
 				console.warn("[REDIS] Connection refused - Redis may not be running");
 				isConnected = false;
 			} else {
@@ -125,7 +126,8 @@ function getRedisSubClient(): Redis | null {
 		});
 
 		redisSubClient.on("error", (err) => {
-			if (err.code !== "ECONNREFUSED") {
+			const code = (err as { code?: string }).code;
+			if (code !== "ECONNREFUSED") {
 				console.error("[REDIS] Subscriber connection error:", err.message);
 			}
 		});
