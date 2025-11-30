@@ -138,7 +138,7 @@ export function TicketAgentTab({
 		if (opencodeMessages.length > 0) {
 			opencodeChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
 		}
-	});
+	}, [opencodeMessages.length]);
 
 	const handleSendOpencodeMessage = () => {
 		if (!opencodeChatInput.trim() || !ticketId || !opencodeChatSessionId)
@@ -247,8 +247,9 @@ export function TicketAgentTab({
 										<div className="relative pl-8" key={msg.id}>
 											{/* Timeline dot */}
 											<div
-												className={`absolute top-2 left-0 h-3.5 w-3.5 rounded-full border-2 border-background ring-4 ring-background ${isUser ? "bg-foreground" : "bg-primary"
-													}`}
+												className={`absolute top-2 left-0 h-3.5 w-3.5 rounded-full border-2 border-background ring-4 ring-background ${
+													isUser ? "bg-foreground" : "bg-primary"
+												}`}
 											/>
 
 											{/* Date header */}

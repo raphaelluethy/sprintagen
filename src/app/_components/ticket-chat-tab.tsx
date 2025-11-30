@@ -49,7 +49,7 @@ export function TicketChatTab({
 		if (messages.length > 0) {
 			chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
 		}
-	});
+	}, [messages.length]);
 
 	const handleSendMessage = () => {
 		if (!chatInput.trim() || !ticketId) return;
