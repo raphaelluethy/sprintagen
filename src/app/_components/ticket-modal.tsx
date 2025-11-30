@@ -242,12 +242,11 @@ function LiveAnalysisProgress({
 				<div className="space-y-1.5">
 					{steps.map((step, index) => (
 						<div
-							className={`flex items-center gap-2 rounded-md border px-3 py-2 transition-all ${
-								index === steps.length - 1 &&
+							className={`flex items-center gap-2 rounded-md border px-3 py-2 transition-all ${index === steps.length - 1 &&
 								(step.status === "running" || step.status === "pending")
-									? "border-foreground/20 bg-foreground/5"
-									: "border-border/60 bg-card/50"
-							}`}
+								? "border-foreground/20 bg-foreground/5"
+								: "border-border/60 bg-card/50"
+								}`}
 							key={step.id}
 						>
 							{getStatusIcon(step.status)}
@@ -440,7 +439,6 @@ export function TicketModal({
 	const [liveAnalysisSteps, setLiveAnalysisSteps] = useState<
 		{ tool: string; title: string; status: string; id: string }[]
 	>([]);
-	const lastSeenToolCountRef = useRef(0);
 
 	// Determine if this ticket has a pending Ask Opencode run (from parent)
 	const thisTicketAskPending = ticket?.id
@@ -449,10 +447,7 @@ export function TicketModal({
 
 	const askRunCompleted =
 		thisTicketAskPending &&
-		(sseStream.status === "completed" ||
-			sseStream.status === "error" ||
-			opencodeData?.status === "completed" ||
-			opencodeData?.status === "error");
+		(sseStream.status === "completed" || sseStream.status === "error");
 	const askOpencodeInFlight = thisTicketAskPending && !askRunCompleted;
 
 	const sessionHistoryQuery = api.ticket.getSessionHistory.useQuery(
@@ -467,6 +462,9 @@ export function TicketModal({
 		() =>
 			(sessionHistoryQuery.data ?? []).map((session) => ({
 				...session,
+				id: session.sessionId,
+				sessionType: "chat" as const,
+				startedAt: session.createdAt.getTime(),
 				messages: ((session.messages ?? []) as OpencodeChatMessage[]).map(
 					(message) => ({
 						...message,
@@ -514,84 +512,6 @@ export function TicketModal({
 			return () => clearTimeout(timeout);
 		}
 	}, [askOpencodeInFlight, liveAnalysisSteps.length]);
-
-	// Poll for live analysis steps when askOpencode is running for this ticket
-	// This is a fallback when SSE is not connected
-	const pollForSteps = useCallback(async () => {
-		// Skip polling if SSE is connected and providing data
-		if (sseStream.isConnected && sseStream.toolCalls.length > 0) return;
-
-		// Only poll if this ticket has a pending Ask Opencode run
-		if (!askOpencodeInFlight || !ticket?.id) return;
-
-		try {
-			// Fetch latest messages from the Opencode chat for this ticket
-			const response = await fetch(
-				`/api/trpc/ticket.getOpencodeChat?batch=1&input=${encodeURIComponent(
-					JSON.stringify({ "0": { json: { ticketId: ticket.id } } }),
-				)}`,
-			);
-			if (!response.ok) return;
-
-			const data = await response.json();
-			const messagesData =
-				data?.[0]?.result?.data?.json?.messages ??
-				data?.[0]?.result?.data?.json ??
-				[];
-
-			// Extract tool calls from the latest assistant message
-			const assistantMessages = messagesData.filter(
-				(m: OpencodeChatMessage) => m.role === "assistant",
-			);
-			if (assistantMessages.length === 0) return;
-
-			const latestMessage = assistantMessages[assistantMessages.length - 1];
-			const toolParts =
-				latestMessage?.parts?.filter((p: MessagePart) => p.type === "tool") ??
-				[];
-
-			// Only update if we have new tools
-			if (toolParts.length > lastSeenToolCountRef.current) {
-				lastSeenToolCountRef.current = toolParts.length;
-				setLiveAnalysisSteps(
-					toolParts.map((t: ToolPart) => ({
-						id: t.id,
-						tool: t.tool,
-						title:
-							t.state.status === "completed" || t.state.status === "running"
-								? (t.state.title ?? "")
-								: "",
-						status: t.state.status,
-					})),
-				);
-			}
-		} catch {
-			// Silently ignore polling errors
-		}
-	}, [
-		askOpencodeInFlight,
-		ticket?.id,
-		sseStream.isConnected,
-		sseStream.toolCalls.length,
-	]);
-
-	// Set up polling interval when analyzing (fallback when SSE is not working)
-	useEffect(() => {
-		if (!askOpencodeInFlight) return;
-
-		// Reset tool count when starting a new analysis
-		lastSeenToolCountRef.current = 0;
-		setLiveAnalysisSteps([]);
-
-		// Only use polling if SSE is not connected
-		if (sseStream.isConnected) return;
-
-		// Poll immediately and then every 500ms
-		pollForSteps();
-		const interval = setInterval(pollForSteps, 500);
-
-		return () => clearInterval(interval);
-	}, [askOpencodeInFlight, pollForSteps, sseStream.isConnected]);
 
 	// Scroll to bottom when messages change
 	useEffect(() => {
@@ -973,7 +893,7 @@ export function TicketModal({
 													key={session.id}
 												>
 													<CardContent className="space-y-3 p-4">
-														<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+														<div className="flex flex-wrap items-center justify-between gap-2 text-muted-foreground text-xs">
 															<span className="uppercase tracking-wider">
 																{session.sessionType} · {session.status}
 															</span>
@@ -1014,11 +934,10 @@ export function TicketModal({
 																			key={msg.id}
 																		>
 																			<div
-																				className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${
-																					isUser
-																						? "bg-foreground text-background"
-																						: "border border-border/60 bg-card/50"
-																				}`}
+																				className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${isUser
+																					? "bg-foreground text-background"
+																					: "border border-border/60 bg-card/50"
+																					}`}
 																			>
 																				{!isUser && hasReasoning && (
 																					<OpencodeReasoningDisplay
@@ -1098,11 +1017,10 @@ export function TicketModal({
 												key={msg.id}
 											>
 												<div
-													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${
-														msg.role === "user"
-															? "bg-foreground text-background"
-															: "border border-border/60 bg-card/50"
-													}`}
+													className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${msg.role === "user"
+														? "bg-foreground text-background"
+														: "border border-border/60 bg-card/50"
+														}`}
 												>
 													<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
 														<Markdown>{msg.content}</Markdown>
@@ -1191,7 +1109,7 @@ export function TicketModal({
 									<ScrollArea className="min-h-0 flex-1">
 										<div className="space-y-3 pr-4">
 											{startSessionMutation.isPending ||
-											opencodeChatQuery.isLoading ? (
+												opencodeChatQuery.isLoading ? (
 												<div className="space-y-3">
 													<div className="flex items-center gap-2">
 														<svg
@@ -1273,11 +1191,10 @@ export function TicketModal({
 																className={`flex ${isUser ? "justify-end" : "justify-start"}`}
 															>
 																<div
-																	className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${
-																		isUser
-																			? "bg-foreground text-background"
-																			: "border border-border/60 bg-card/50"
-																	} ${isLegacySession ? "opacity-60" : ""}`}
+																	className={`max-w-[80%] overflow-hidden rounded-lg px-4 py-2.5 ${isUser
+																		? "bg-foreground text-background"
+																		: "border border-border/60 bg-card/50"
+																		} ${isLegacySession ? "opacity-60" : ""}`}
 																>
 																	{/* Reasoning section (collapsible) for assistant messages */}
 																	{!isUser && hasReasoning && (

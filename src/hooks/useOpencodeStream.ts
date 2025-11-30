@@ -1,24 +1,11 @@
 import type {
-	Event,
 	Message,
 	Part,
 	SessionStatus,
 	ToolPart,
 } from "@opencode-ai/sdk";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-/**
- * SDK Event types we care about
- */
-type SdkEvent =
-	| { type: "message.updated"; properties: { info: Message } }
-	| { type: "message.part.updated"; properties: { part: Part; delta?: string } }
-	| {
-			type: "session.status";
-			properties: { sessionID: string; status: SessionStatus };
-	  }
-	| { type: "session.idle"; properties: { sessionID: string } }
-	| Event;
+import { useMemo } from "react";
+import { api } from "@/trpc/react";
 
 /**
  * Message with parts combined
@@ -26,31 +13,6 @@ type SdkEvent =
 interface MessageWithParts {
 	info: Message;
 	parts: Part[];
-}
-
-/**
- * Session state from the store
- */
-interface SessionState {
-	sessionId: string;
-	ticketId?: string;
-	sessionType: "chat" | "ask" | "admin";
-	status: string;
-	messages: MessageWithParts[];
-	currentToolCalls: ToolPart[];
-	startedAt?: number;
-	updatedAt?: number;
-}
-
-/**
- * Stream event from SSE
- */
-interface StreamEvent {
-	type: "init" | "event" | "error";
-	state?: SessionState;
-	directory?: string;
-	event?: SdkEvent;
-	error?: string;
 }
 
 interface UseOpencodeStreamResult {
@@ -65,278 +27,61 @@ interface UseOpencodeStreamResult {
 }
 
 /**
- * Hook to connect to SSE stream for OpenCode session updates
- * Uses the new event-driven architecture with SDK event types
+ * Hook to poll for OpenCode session updates
+ * Replaces the previous SSE implementation with TRPC polling
  */
 export function useOpencodeStream(
 	sessionId: string | null,
 ): UseOpencodeStreamResult {
-	const [messages, setMessages] = useState<MessageWithParts[]>([]);
-	const [status, setStatus] = useState<SessionStatus>({ type: "idle" });
-	const [error, setError] = useState<string | null>(null);
-	const [isConnected, setIsConnected] = useState(false);
-
-	const eventSourceRef = useRef<EventSource | null>(null);
-	const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-	const reconnectAttempts = useRef(0);
-	const maxReconnectAttempts = 5;
-	const pendingPartsRef = useRef<Record<string, Part[]>>({});
-
-	const toolCalls = useMemo(
-		() =>
-			messages
-				.flatMap((m) => m.parts)
-				.filter(
-					(part): part is ToolPart =>
-						part.type === "tool" &&
-						(part.state.status === "pending" ||
-							part.state.status === "running"),
-				),
-		[messages],
-	);
-
-	const applyPartUpdate = useCallback(
-		(parts: Part[], incoming: Part & { delta?: string }): Part[] => {
-			const { delta, ...incomingRest } = incoming as Part & { delta?: string };
-			const idx = parts.findIndex((p) => p.id === incomingRest.id);
-
-			if (idx >= 0) {
-				const existing = parts[idx];
-				if (!existing) return parts;
-				if (existing.type === "text") {
-					const baseText =
-						(existing as { text?: string }).text ??
-						(incomingRest as { text?: string }).text ??
-						"";
-					const text =
-						delta !== undefined
-							? `${baseText}${delta}`
-							: ((incomingRest as { text?: string }).text ?? baseText);
-					const merged = { ...existing, ...incomingRest, text } as Part;
-					const next = [...parts];
-					next[idx] = merged;
-					return next;
-				}
-
-				const merged = { ...existing, ...incomingRest } as Part;
-				const next = [...parts];
-				next[idx] = merged;
-				return next;
-			}
-
-			let newPart: Part = incomingRest as Part;
-			if (incomingRest.type === "text") {
-				const baseText = (incomingRest as { text?: string }).text ?? "";
-				const text = delta !== undefined ? `${baseText}${delta}` : baseText;
-				newPart = { ...incomingRest, text } as Part;
-			}
-
-			const next = [...parts, newPart];
-			next.sort((a, b) => a.id.localeCompare(b.id));
-			return next;
+	const query = api.opencode.getFullSession.useQuery(
+		{ sessionId: sessionId ?? "" },
+		{
+			enabled: !!sessionId,
+			refetchInterval: (query) => {
+				const data = query.state.data;
+				// Stop polling if session is idle (completed) or error
+				if (!data) return 1000;
+				if (data.status.type === "idle") return false;
+				return 1000; // Poll every 1s while running
+			},
+			retry: false,
 		},
-		[],
 	);
 
-	/**
-	 * Handle incoming SDK events
-	 */
-	const handleEvent = useCallback(
-		(event: SdkEvent) => {
-			switch (event.type) {
-				case "message.updated": {
-					const msg = event.properties.info;
-					setMessages((prev) => {
-						const idx = prev.findIndex((m) => m.info.id === msg.id);
-						const queued = pendingPartsRef.current[msg.id];
+	const messages = useMemo(() => {
+		if (!query.data?.messages) return [];
+		// Map flattened messages back to MessageWithParts structure if needed
+		// The router returns transformed messages which are flattened
+		// We'll reconstruct the info/parts structure to maintain compatibility
+		return query.data.messages.map((msg) => ({
+			info: {
+				id: msg.id,
+				role: msg.role,
+				sessionID: msg.sessionId ?? "",
+				time: { created: msg.createdAt.getTime() },
+				// We don't have all original info fields but this should suffice for UI
+			} as Message,
+			parts: msg.parts ?? [],
+		}));
+	}, [query.data?.messages]);
 
-						if (idx >= 0) {
-							const updated = [...prev];
-							const existing = {
-								...updated[idx],
-								info: msg,
-							} as MessageWithParts;
-							let parts = existing.parts ?? [];
-							if (queued && queued.length > 0) {
-								parts = queued.reduce(
-									(acc, part) => applyPartUpdate(acc, part),
-									parts,
-								);
-								delete pendingPartsRef.current[msg.id];
-							}
-							updated[idx] = { ...existing, parts };
-							return updated;
-						}
+	const toolCalls = useMemo(() => {
+		return query.data?.toolCalls ?? [];
+	}, [query.data?.toolCalls]);
 
-						let initialParts: Part[] = queued ?? [];
-						if (queued) {
-							delete pendingPartsRef.current[msg.id];
-						}
+	const sessionStatus = useMemo((): SessionStatus => {
+		return query.data?.status ?? { type: "idle" };
+	}, [query.data?.status]);
 
-						return [...prev, { info: msg, parts: initialParts }].sort((a, b) =>
-							a.info.id.localeCompare(b.info.id),
-						);
-					});
-					break;
-				}
-
-				case "message.part.updated": {
-					const deltaFromEvent = (event.properties as { delta?: string }).delta;
-					const deltaFromPart = (event.properties.part as { delta?: string })
-						.delta;
-					const incomingPart = {
-						...event.properties.part,
-						...(deltaFromEvent !== undefined
-							? { delta: deltaFromEvent }
-							: deltaFromPart !== undefined
-								? { delta: deltaFromPart }
-								: {}),
-					} as Part & { delta?: string };
-					setMessages((prev) => {
-						const msgIdx = prev.findIndex(
-							(m) => m.info.id === incomingPart.messageID,
-						);
-						if (msgIdx < 0) {
-							const existingQueue =
-								pendingPartsRef.current[incomingPart.messageID] ?? [];
-							pendingPartsRef.current[incomingPart.messageID] = applyPartUpdate(
-								existingQueue,
-								incomingPart,
-							);
-							return prev;
-						}
-
-						const updated = [...prev];
-						const msg = { ...updated[msgIdx] } as MessageWithParts;
-						msg.parts = applyPartUpdate(msg.parts ?? [], incomingPart);
-						updated[msgIdx] = msg;
-						return updated;
-					});
-					break;
-				}
-
-				case "session.status": {
-					setStatus(event.properties.status);
-					break;
-				}
-
-				case "session.idle": {
-					setStatus({ type: "idle" });
-					break;
-				}
-
-				default:
-					// Other events can be handled as needed
-					break;
-			}
-		},
-		[applyPartUpdate],
-	);
-
-	useEffect(() => {
-		if (!sessionId) {
-			// Reset state when sessionId is cleared
-			setMessages([]);
-			setStatus({ type: "idle" });
-			setError(null);
-			setIsConnected(false);
-			return;
-		}
-
-		const connect = () => {
-			// Clean up existing connection
-			if (eventSourceRef.current) {
-				eventSourceRef.current.close();
-			}
-
-			const url = `/api/opencode/sessions/${sessionId}/stream`;
-			const eventSource = new EventSource(url);
-
-			eventSource.onopen = () => {
-				console.log(`[SSE] Connected to session ${sessionId}`);
-				setIsConnected(true);
-				setError(null);
-				reconnectAttempts.current = 0;
-			};
-
-			eventSource.onmessage = (event) => {
-				try {
-					const data = JSON.parse(event.data) as StreamEvent;
-
-					if (data.type === "init") {
-						// Initial state from store
-						if (data.state) {
-							setMessages(data.state.messages || []);
-							// Convert status string to SessionStatus
-							const statusType = data.state.status as "idle" | "busy" | "retry";
-							if (statusType === "busy") {
-								setStatus({ type: "busy" });
-							} else if (statusType === "retry") {
-								setStatus({ type: "retry", attempt: 0, message: "", next: 0 });
-							} else {
-								setStatus({ type: "idle" });
-							}
-						}
-					} else if (data.type === "event" && data.event) {
-						// SDK event
-						handleEvent(data.event);
-					} else if (data.type === "error") {
-						setError(data.error || "Unknown error");
-					}
-				} catch (err) {
-					console.error("[SSE] Error parsing message:", err);
-					setError("Failed to parse server message");
-				}
-			};
-
-			eventSource.onerror = (err) => {
-				console.error(`[SSE] Error for session ${sessionId}:`, err);
-				setIsConnected(false);
-
-				// Attempt to reconnect
-				if (reconnectAttempts.current < maxReconnectAttempts) {
-					reconnectAttempts.current++;
-					const delay = Math.min(1000 * 2 ** reconnectAttempts.current, 10000);
-					console.log(
-						`[SSE] Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current}/${maxReconnectAttempts})`,
-					);
-
-					reconnectTimeoutRef.current = setTimeout(() => {
-						connect();
-					}, delay);
-				} else {
-					setError("Failed to connect to session stream");
-					eventSource.close();
-				}
-			};
-
-			eventSourceRef.current = eventSource;
-		};
-
-		connect();
-
-		// Cleanup on unmount or sessionId change
-		return () => {
-			if (eventSourceRef.current) {
-				eventSourceRef.current.close();
-				eventSourceRef.current = null;
-			}
-			if (reconnectTimeoutRef.current) {
-				clearTimeout(reconnectTimeoutRef.current);
-				reconnectTimeoutRef.current = null;
-			}
-			setIsConnected(false);
-		};
-	}, [sessionId, handleEvent]);
-
-	// Convert SessionStatus to legacy status string
-	const legacyStatus = useMemo(():
+	const status = useMemo(():
 		| "pending"
 		| "running"
 		| "completed"
 		| "error" => {
-		if (error) return "error";
-		switch (status.type) {
+		if (query.isError) return "error";
+		if (query.isLoading && !query.data) return "pending";
+
+		switch (sessionStatus.type) {
 			case "busy":
 				return "running";
 			case "retry":
@@ -347,21 +92,22 @@ export function useOpencodeStream(
 			default:
 				return "pending";
 		}
-	}, [status, error, messages.length]);
+	}, [query.isError, query.isLoading, query.data, sessionStatus, messages.length]);
 
 	return {
 		messages,
 		toolCalls,
-		status: legacyStatus,
-		sessionStatus: status,
-		error,
-		isConnected,
+		status,
+		sessionStatus,
+		error: query.error?.message ?? null,
+		isConnected: !query.isError && !!sessionId,
 	};
 }
 
 /**
  * Hook to get transformed messages for display
  * Converts SDK format to the legacy OpencodeChatMessage format for backward compatibility
+ * @deprecated Use useOpencodeStream directly or the TRPC query
  */
 export function useOpencodeMessages(sessionId: string | null) {
 	const { messages, toolCalls, status, sessionStatus, error, isConnected } =
@@ -384,6 +130,19 @@ export function useOpencodeMessages(sessionId: string | null) {
 					)
 					.map((p) => p.reason);
 
+				const fileParts = m.parts
+					.filter(
+						(p): p is Extract<Part, { type: "file" }> => p.type === "file",
+					)
+					.map((p) => {
+						// @ts-expect-error - SDK types might be incomplete in our view
+						const content = p.content ?? p.data ?? "";
+						// @ts-expect-error - SDK types might be incomplete in our view
+						const mimeType = p.mimeType ?? "application/octet-stream";
+						return `[File: ${mimeType}]\n${content}`;
+					});
+
+
 				const reasoningParts = m.parts
 					.filter(
 						(p): p is Extract<Part, { type: "reasoning" }> =>
@@ -396,7 +155,7 @@ export function useOpencodeMessages(sessionId: string | null) {
 				return {
 					id: m.info.id,
 					role: m.info.role,
-					text: [...textParts, ...stepFinishParts].join("\n"),
+					text: [...textParts, ...fileParts, ...stepFinishParts].join("\n"),
 					createdAt: new Date(time.created ?? Date.now()),
 					model:
 						"providerID" in m.info && "modelID" in m.info

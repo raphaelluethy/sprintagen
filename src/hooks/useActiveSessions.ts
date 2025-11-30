@@ -66,11 +66,12 @@ export function useActiveSessions(): UseActiveSessionsResult {
 	// Populate pending tickets state from server data
 	useEffect(() => {
 		if (pendingInquiriesQuery.data) {
+			const data = pendingInquiriesQuery.data as unknown as PendingInquiry[];
 			const newPendingIds = new Set(
-				pendingInquiriesQuery.data.map((p) => p.ticketId),
+				data.map((p) => p.ticketId),
 			);
 			const newSessionMap = new Map(
-				pendingInquiriesQuery.data.map((p) => [p.ticketId, p.sessionId]),
+				data.map((p) => [p.ticketId, p.sessionId]),
 			);
 
 			// Only update if changed to prevent unnecessary re-renders

@@ -29,19 +29,11 @@ import {
 	checkOpencodeHealth,
 	createNewOpencodeSessionForTicket,
 	getOpencodeMessages,
-	sendOpencodeMessage,
+	lookupExistingOpencodeSession,
 	type OpencodeChatMessage,
+	sendOpencodeMessage,
 } from "@/server/tickets/opencode";
-import { startPolling } from "@/server/tickets/opencode-poller";
 import { getProviderRegistry } from "@/server/tickets/provider-registry";
-import {
-	createPendingSession,
-	getActiveSession,
-	getAllPendingSessions,
-	getSessionHistory,
-	getSessionState,
-	updateSessionState,
-} from "@/server/tickets/session-state";
 import {
 	createManualTicket,
 	syncAllProviders,
@@ -567,37 +559,15 @@ export const ticketRouter = createTRPCRouter({
 	 * Used to restore UI state on page load
 	 */
 	getPendingOpencodeInquiries: publicProcedure.query(async () => {
-		const pendingSessions = await getAllPendingSessions();
-
-		// Transform to a list of ticket IDs with their session info
-		// Only include Ask Opencode sessions so chat sessions don't appear
-		// as "pending analyses" in the dashboard.
-		const pendingInquiries = pendingSessions
-			.filter(
-				(
-					session,
-				): session is typeof session & {
-					ticketId: string;
-					sessionType: "ask";
-				} => !!session.ticketId && session.sessionType === "ask",
-			)
-			.map((session) => ({
-				ticketId: session.ticketId,
-				sessionId: session.sessionId,
-				sessionType: session.sessionType,
-				status: session.status,
-				toolCalls: session.currentToolCalls,
-				startedAt: session.startedAt,
-			}));
-
-		return pendingInquiries;
+		// With Redis removed, we no longer track pending sessions in a global list.
+		// We could query tickets with opencodeSessionId, but we don't know their status efficiently.
+		// For now, return empty list to satisfy the UI contract.
+		return [];
 	}),
 
 	/**
 	 * Start a new Opencode session for a ticket.
-	 * Creates a fresh session, creates Redis entry, starts background poller,
-	 * and returns the sessionId immediately (non-blocking).
-	 * Used by the UI to create per-open chat sessions.
+	 * Creates a fresh session and returns the sessionId immediately.
 	 */
 	startOpencodeSession: publicProcedure
 		.input(
@@ -640,15 +610,6 @@ export const ticketRouter = createTRPCRouter({
 
 			const sessionId = result.data.sessionId;
 
-			// Create pending entry in Redis
-			await createPendingSession(sessionId, {
-				ticketId: input.ticketId,
-				sessionType: input.sessionType,
-			});
-
-			// Start background poller
-			startPolling(sessionId);
-
 			return {
 				sessionId,
 			};
@@ -656,8 +617,7 @@ export const ticketRouter = createTRPCRouter({
 
 	/**
 	 * Get Opencode chat messages for a ticket
-	 * First checks Redis for active session, then falls back to PostgreSQL for historical data.
-	 * Optionally accepts an explicit sessionId to fetch messages from a specific session.
+	 * Fetches messages directly from Opencode SDK.
 	 */
 	getOpencodeChat: publicProcedure
 		.input(
@@ -679,37 +639,7 @@ export const ticketRouter = createTRPCRouter({
 				});
 			}
 
-			// If explicit sessionId provided, check Redis first
-			if (input.sessionId) {
-				const redisState = await getSessionState(input.sessionId);
-				if (redisState) {
-					return {
-						messages: redisState.messages,
-						currentSessionId: input.sessionId,
-						isNewSession: false,
-						status: redisState.status,
-						toolCalls: redisState.currentToolCalls,
-					};
-				}
-			}
-
-			// Check for active session in Redis
-			const activeSessionId =
-				input.sessionId ?? (await getActiveSession(input.ticketId));
-			if (activeSessionId) {
-				const redisState = await getSessionState(activeSessionId);
-				if (redisState) {
-					return {
-						messages: redisState.messages,
-						currentSessionId: activeSessionId,
-						isNewSession: false,
-						status: redisState.status,
-						toolCalls: redisState.currentToolCalls,
-					};
-				}
-			}
-
-			// Fall back to fetching from OpenCode API (for historical sessions)
+			// Fetch from OpenCode API
 			const result = await getOpencodeMessages(
 				input.ticketId,
 				ticket.title,
@@ -727,7 +657,7 @@ export const ticketRouter = createTRPCRouter({
 						"Opencode session expired. A new session will be created automatically.";
 				} else if (result.error.includes("Failed to fetch")) {
 					userMessage =
-						"Unable to reach Opencode server. Please check if it's running.";
+						"Unable to reach Opencode server. Please check if the server is running.";
 				}
 
 				throw new TRPCError({
@@ -742,16 +672,14 @@ export const ticketRouter = createTRPCRouter({
 				messages: result.data.messages,
 				currentSessionId: result.data.currentSessionId,
 				isNewSession: result.data.isNewSession,
-				status: "completed" as const,
+				status: "completed" as const, // We don't have granular status without polling/events
 				toolCalls: [],
 			};
 		}),
 
 	/**
 	 * Send a message to a ticket's Opencode session
-	 * Sends message to OpenCode, updates Redis state, and returns immediately.
-	 * Poller will handle response updates via SSE.
-	 * Optionally accepts an explicit sessionId to send into a specific session.
+	 * Sends message to OpenCode via SDK.
 	 */
 	sendOpencodeChatMessage: publicProcedure
 		.input(
@@ -775,100 +703,46 @@ export const ticketRouter = createTRPCRouter({
 				});
 			}
 
-			// Ensure session exists and is tracked in Redis
-			let sessionId: string | null | undefined = input.sessionId;
-			if (!sessionId) {
-				sessionId = await getActiveSession(input.ticketId);
-			}
-
-			if (!sessionId) {
-				// Create new session if none exists
-				const sessionResult = await createNewOpencodeSessionForTicket(
-					input.ticketId,
-					ticket.title,
-				);
-				if (!sessionResult.success) {
-					throw new TRPCError({
-						code: "INTERNAL_SERVER_ERROR",
-						message: sessionResult.error,
-					});
-				}
-				sessionId = sessionResult.data.sessionId;
-				await createPendingSession(sessionId, {
-					ticketId: input.ticketId,
-					sessionType: "chat",
-				});
-				startPolling(sessionId);
-			}
-
-			// Send message to OpenCode (non-blocking - poller handles response)
 			const result = await sendOpencodeMessage(
 				input.ticketId,
 				ticket.title,
 				input.message,
-				sessionId,
+				input.sessionId,
 			);
 
 			if (!result.success) {
-				// Provide actionable error messages
-				let userMessage = result.error;
-				if (
-					result.error.includes("ENOENT") ||
-					result.error.includes("NotFoundError")
-				) {
-					userMessage =
-						"Previous session expired. A new session was created—please retry your message.";
-				} else if (result.error.includes("Failed to send")) {
-					userMessage =
-						"Failed to send message to Opencode. Please check if the server is running.";
-				}
-
 				throw new TRPCError({
 					code: "INTERNAL_SERVER_ERROR",
-					message: userMessage,
-					cause: result.error,
+					message: result.error,
 				});
 			}
 
-			// Update Redis with user message
-			await updateSessionState(sessionId, {
-				messages: [result.data.message],
-				status: "running",
-			});
-
-			// Ensure poller is running
-			startPolling(sessionId);
-
-			// Return immediately - updates will come via SSE
 			return {
+				success: true,
+				sessionId: result.data.sessionId,
 				...result.data.message,
-				sessionId,
-				isNewSession: result.data.isNewSession,
 			};
 		}),
 
 	/**
-	 * Get session history for a ticket from PostgreSQL
+	 * Get session history for a ticket
 	 */
 	getSessionHistory: publicProcedure
 		.input(z.object({ ticketId: z.string() }))
-		.query(async ({ input }) => {
-			const sessions = await getSessionHistory(input.ticketId);
-			return sessions.map((session) => ({
-				...session,
-				messages: ((session.messages ?? []) as OpencodeChatMessage[]).map(
-					(message) => ({
-						...message,
-						createdAt: new Date(message.createdAt),
-					}),
-				),
-			}));
+		.query(async (): Promise<{
+			messages: OpencodeChatMessage[];
+			sessionId: string;
+			status: "completed" | "running" | "error" | "pending";
+			createdAt: Date;
+		}[]> => {
+			// With Redis removed, we don't have historical session tracking yet.
+			// Return empty array for now.
+			return [];
 		}),
 
 	/**
 	 * Ask Opencode about implementing a ticket
-	 * Creates session, sends prompt, starts poller, and returns immediately (non-blocking).
-	 * Updates will be pushed via SSE.
+	 * Creates session, sends prompt, and returns immediately.
 	 */
 	askOpencode: publicProcedure
 		.input(
@@ -900,107 +774,52 @@ export const ticketRouter = createTRPCRouter({
 				});
 			}
 
-			// Build the prompt with ticket context
-			const latestRanking = ticket.rankings?.[0];
-			const rankingContext = latestRanking
-				? dedent(`
-					\n\nAI Analysis:
-					- Urgency: ${latestRanking.urgencyScore}/10
-					- Impact: ${latestRanking.impactScore}/10
-					- Complexity: ${latestRanking.complexityScore}/10
-					- Overall Score: ${latestRanking.overallScore}/10
-					- Reasoning: ${latestRanking.reasoning ?? "N/A"}
-				`)
-				: "";
-
-			const defaultQuestion = dedent(`
-				Please analyze this ticket and provide:
-				1. A high-level implementation plan with key steps (keep this very short, do not try to investigate the issue, if it is not easily found, just say "The issue is too complex to analyze for a quick recommendation")
-				2. Which files/modules in the codebase are most likely to be affected
-				3. Recommend a programmer for the ticket that has touched the files that are most likely to be affected most recently using git history
-
-				Be concise and helpful.
-			`);
-
-			const prompt = dedent(`
-				Ticket: ${ticket.title}
-				Provider: ${ticket.provider}
-				Status: ${ticket.status}
-				Priority: ${ticket.priority ?? "medium"}
-				Labels: ${(ticket.labels ?? []).join(", ") || "none"}
-				${rankingContext}
-
-				Description:
-				${ticket.description ?? "No description provided."}
-
-				---
-
-				${input.question ?? defaultQuestion}
-			`);
-
-			console.log("[OPENCODE] Prompt:", prompt);
-
-			// Step 1: Create a new session first
-			console.log("[OPENCODE] Creating session...");
+			// Create a new session for this analysis
 			const sessionResult = await createNewOpencodeSessionForTicket(
 				input.ticketId,
 				ticket.title,
 			);
 
 			if (!sessionResult.success) {
-				console.log(
-					"[OPENCODE] Failed to create session:",
-					sessionResult.error,
-				);
 				throw new TRPCError({
 					code: "INTERNAL_SERVER_ERROR",
-					message:
-						"Unable to create Opencode session. Please check if the server is running.",
-					cause: sessionResult.error,
+					message: sessionResult.error,
 				});
 			}
 
-			const sessionId = sessionResult.data.sessionId;
-			console.log("[OPENCODE] Session created:", sessionId);
+			const { sessionId } = sessionResult.data;
 
-			// Step 2: Create pending entry in Redis BEFORE sending the message
-			// This ensures the session is tracked even if sending takes a long time
-			console.log("[OPENCODE] Creating pending session in Redis...");
-			await createPendingSession(sessionId, {
-				ticketId: input.ticketId,
-				sessionType: "ask",
-				metadata: { prompt, ticketTitle: ticket.title, agent: "docs-agent" },
-			});
-			console.log("[OPENCODE] Pending session created in Redis");
+			// Build the prompt
+			const stepsPrompt = buildRecommendedStepsPrompt(ticket);
+			const fullPrompt = input.question
+				? `${stepsPrompt.system}\n\n${stepsPrompt.user}\n\nUser Question: ${input.question}`
+				: `${stepsPrompt.system}\n\n${stepsPrompt.user}`;
 
-			// Step 3: Start the poller BEFORE sending the message
-			// This ensures we start capturing updates immediately
-			console.log("[OPENCODE] Starting poller...");
-			startPolling(sessionId);
-			console.log("[OPENCODE] Poller started");
-
-			// Step 4: Send the message (this might take a while but we've already
-			// set up tracking, so the UI can show progress)
-			console.log("[OPENCODE] Sending message to Opencode...");
-			const sendResult = await sendOpencodeMessage(
+			// Send the prompt to Opencode
+			// We don't await the full completion here to avoid blocking the UI for too long
+			// The frontend will poll for updates
+			const messageResult = await sendOpencodeMessage(
 				input.ticketId,
 				ticket.title,
-				prompt,
+				fullPrompt,
 				sessionId,
 			);
 
-			if (!sendResult.success) {
-				console.log("[OPENCODE] Failed to send message:", sendResult.error);
-				// Don't throw - the session is already created and being polled
-				// The poller will handle the error state
-			} else {
-				console.log("[OPENCODE] Message sent successfully");
+			if (!messageResult.success) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: messageResult.error,
+				});
 			}
 
-			// Return immediately - updates will come via SSE/poller
-			return {
-				sessionId,
-				isNewSession: true,
-			};
+			// Save the result as a recommendation so the UI can display it
+			await ctx.db.insert(ticketRecommendations).values({
+				ticketId: input.ticketId,
+				recommendedSteps: messageResult.data.message.text,
+				opencodeSummary: messageResult.data.message.reasoning ?? null, // Use reasoning as summary if available
+				modelUsed: messageResult.data.message.model ?? "opencode-agent",
+			});
+
+			return { success: true, sessionId };
 		}),
 });

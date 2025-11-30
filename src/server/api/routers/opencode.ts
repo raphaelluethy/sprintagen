@@ -12,19 +12,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { env } from "@/env";
 import { getOpencodeClient } from "@/lib/opencode-client";
-import { startEventListener } from "@/lib/opencode-event-listener";
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
 import { tickets } from "@/server/db/schema";
-import {
-	getOpencodeStore,
-	type StoredSessionState,
-} from "@/server/redis/opencode-store";
-
-// Start the event listener when this module loads
-// This ensures we're always listening for OpenCode events
-startEventListener().catch((err) => {
-	console.error("[OPENCODE-ROUTER] Failed to start event listener:", err);
-});
 
 /**
  * Helper to extract text from message parts
@@ -210,14 +199,6 @@ export const opencodeRouter = createTRPCRouter({
 	getSessionStatus: publicProcedure
 		.input(z.object({ id: z.string() }))
 		.query(async ({ input }) => {
-			// First check Redis store
-			const store = getOpencodeStore();
-			const status = await store.getStatus(input.id);
-			if (status) {
-				return status;
-			}
-
-			// Fall back to SDK
 			const client = getOpencodeClient();
 			const result = await client.session.status();
 
@@ -254,14 +235,6 @@ export const opencodeRouter = createTRPCRouter({
 	getSessionDiff: publicProcedure
 		.input(z.object({ id: z.string() }))
 		.query(async ({ input }) => {
-			// First check Redis store
-			const store = getOpencodeStore();
-			const diff = await store.getDiff(input.id);
-			if (diff.length > 0) {
-				return diff;
-			}
-
-			// Fall back to SDK
 			const client = getOpencodeClient();
 			const result = await client.session.diff({ path: { id: input.id } });
 
@@ -278,14 +251,6 @@ export const opencodeRouter = createTRPCRouter({
 	getSessionTodos: publicProcedure
 		.input(z.object({ id: z.string() }))
 		.query(async ({ input }) => {
-			// First check Redis store
-			const store = getOpencodeStore();
-			const todos = await store.getTodos(input.id);
-			if (todos.length > 0) {
-				return todos;
-			}
-
-			// Fall back to SDK
 			const client = getOpencodeClient();
 			const result = await client.session.todo({ path: { id: input.id } });
 
@@ -306,22 +271,6 @@ export const opencodeRouter = createTRPCRouter({
 	getMessages: publicProcedure
 		.input(z.object({ sessionId: z.string() }))
 		.query(async ({ input }) => {
-			// First check Redis store
-			const store = getOpencodeStore();
-			const storedMessages = await store.getMessages(input.sessionId);
-
-			if (storedMessages.length > 0) {
-				// Get parts for each message
-				const messagesWithParts = await Promise.all(
-					storedMessages.map(async (info) => {
-						const parts = await store.getParts(info.id);
-						return transformMessage(info, parts);
-					}),
-				);
-				return messagesWithParts;
-			}
-
-			// Fall back to SDK
 			const client = getOpencodeClient();
 			const result = await client.session.messages({
 				path: { id: input.sessionId },
@@ -339,10 +288,21 @@ export const opencodeRouter = createTRPCRouter({
 	 * Get parts for a message
 	 */
 	getMessageParts: publicProcedure
-		.input(z.object({ messageId: z.string() }))
+		.input(z.object({ messageId: z.string(), sessionId: z.string() }))
 		.query(async ({ input }) => {
-			const store = getOpencodeStore();
-			return store.getParts(input.messageId);
+			// We can't get parts for a single message easily via SDK without fetching all messages
+			// So we fetch all messages and find the one we need
+			const client = getOpencodeClient();
+			const result = await client.session.messages({
+				path: { id: input.sessionId },
+			});
+
+			if (!result.data) {
+				return [];
+			}
+
+			const message = result.data.find((m) => m.info.id === input.messageId);
+			return message?.parts ?? [];
 		}),
 
 	/**
@@ -351,42 +311,6 @@ export const opencodeRouter = createTRPCRouter({
 	getFullSession: publicProcedure
 		.input(z.object({ sessionId: z.string() }))
 		.query(async ({ input }) => {
-			// Try to get from Redis first
-			const store = getOpencodeStore();
-			const trackedSession = await store.getTrackedSession(input.sessionId);
-
-			if (trackedSession) {
-				const storedMessages = await store.getMessages(input.sessionId);
-				const messagesWithParts = await Promise.all(
-					storedMessages.map(async (info) => {
-						const parts = await store.getParts(info.id);
-						return { info, parts };
-					}),
-				);
-
-				const status = await store.getStatus(input.sessionId);
-				const diff = await store.getDiff(input.sessionId);
-				const todos = await store.getTodos(input.sessionId);
-
-				// Get all tool calls
-				const allParts = messagesWithParts.flatMap((m) => m.parts);
-				const toolCalls = getCurrentToolCalls(allParts);
-
-				return {
-					session: trackedSession.session,
-					messages: messagesWithParts.map((m) =>
-						transformMessage(m.info, m.parts),
-					),
-					status: status ?? { type: "idle" as const },
-					diff,
-					todos,
-					toolCalls,
-					ticketId: trackedSession.ticketId,
-					sessionType: trackedSession.sessionType,
-				};
-			}
-
-			// Fall back to SDK
 			const client = getOpencodeClient();
 			const [
 				sessionResult,
@@ -458,13 +382,8 @@ export const opencodeRouter = createTRPCRouter({
 
 			const session = result.data as Session;
 
-			// Track session in Redis
-			const store = getOpencodeStore();
-			await store.createTrackedSession(session, {
-				ticketId: input.ticketId,
-				sessionType: input.sessionType,
-			});
-
+			// If ticketId is provided, we might want to store the session ID in the ticket metadata
+			// But for now, we just return the session
 			return session;
 		}),
 
@@ -503,11 +422,6 @@ export const opencodeRouter = createTRPCRouter({
 			}
 
 			const message = transformMessage(result.data.info, result.data.parts);
-
-			// Update Redis status to busy
-			const store = getOpencodeStore();
-			await store.updateStatus(input.sessionId, { type: "busy" });
-
 			return message;
 		}),
 
@@ -538,39 +452,12 @@ export const opencodeRouter = createTRPCRouter({
 				body: payload,
 			});
 
-			// Update Redis status to busy
-			const store = getOpencodeStore();
-			await store.updateStatus(input.sessionId, { type: "busy" });
-
 			return { sessionId: input.sessionId };
 		}),
 
 	// ========================================================================
 	// Ticket Integration
 	// ========================================================================
-
-	/**
-	 * Get all pending OpenCode inquiries for tickets
-	 */
-	getPendingInquiries: publicProcedure.query(async () => {
-		const store = getOpencodeStore();
-		const activeSessions = await store.getAllActiveSessions();
-
-		return activeSessions
-			.filter(
-				(
-					s,
-				): s is StoredSessionState & { ticketId: string; sessionType: "ask" } =>
-					!!s.ticketId && s.sessionType === "ask",
-			)
-			.map((s) => ({
-				ticketId: s.ticketId,
-				sessionId: s.session.id,
-				sessionType: s.sessionType,
-				status: s.status,
-				startedAt: s.startedAt,
-			}));
-	}),
 
 	/**
 	 * Start a session for a ticket
@@ -610,12 +497,17 @@ export const opencodeRouter = createTRPCRouter({
 
 			const session = result.data as Session;
 
-			// Track in Redis
-			const store = getOpencodeStore();
-			await store.createTrackedSession(session, {
-				ticketId: input.ticketId,
-				sessionType: input.sessionType,
-			});
+			// Store session ID in ticket metadata
+			const metadata = (ticket.metadata ?? {}) as Record<string, unknown>;
+			await ctx.db
+				.update(tickets)
+				.set({
+					metadata: {
+						...metadata,
+						opencodeSessionId: session.id,
+					},
+				})
+				.where(eq(tickets.id, input.ticketId));
 
 			return { sessionId: session.id };
 		}),
@@ -706,12 +598,17 @@ export const opencodeRouter = createTRPCRouter({
 
 			const session = sessionResult.data as Session;
 
-			// Track in Redis
-			const store = getOpencodeStore();
-			await store.createTrackedSession(session, {
-				ticketId: input.ticketId,
-				sessionType: "ask",
-			});
+			// Store session ID in ticket metadata
+			const metadata = (ticket.metadata ?? {}) as Record<string, unknown>;
+			await ctx.db
+				.update(tickets)
+				.set({
+					metadata: {
+						...metadata,
+						opencodeSessionId: session.id,
+					},
+				})
+				.where(eq(tickets.id, input.ticketId));
 
 			// Send the prompt asynchronously
 			const payload = {
@@ -726,9 +623,6 @@ export const opencodeRouter = createTRPCRouter({
 				path: { id: session.id },
 				body: payload,
 			});
-
-			// Update status
-			await store.updateStatus(session.id, { type: "busy" });
 
 			return {
 				sessionId: session.id,
@@ -759,163 +653,71 @@ export const opencodeRouter = createTRPCRouter({
 				});
 			}
 
-			const store = getOpencodeStore();
+			let sessionId = input.sessionId;
 
-			// If explicit sessionId provided, get that session
-			if (input.sessionId) {
-				const trackedSession = await store.getTrackedSession(input.sessionId);
-				if (trackedSession) {
-					const storedMessages = await store.getMessages(input.sessionId);
-					const messagesWithParts = await Promise.all(
-						storedMessages.map(async (info) => {
-							const parts = await store.getParts(info.id);
-							return transformMessage(info, parts);
-						}),
-					);
-
-					const status = await store.getStatus(input.sessionId);
-					const allParts = await Promise.all(
-						storedMessages.map((m) => store.getParts(m.id)),
-					);
-					const toolCalls = getCurrentToolCalls(allParts.flat());
-
-					return {
-						messages: messagesWithParts,
-						currentSessionId: input.sessionId,
-						status: status ?? { type: "idle" as const },
-						toolCalls,
-						isNewSession: false,
-					};
+			// If no explicit session ID, check ticket metadata
+			if (!sessionId) {
+				const metadata = (ticket.metadata ?? {}) as Record<string, unknown>;
+				if (typeof metadata.opencodeSessionId === "string") {
+					sessionId = metadata.opencodeSessionId;
 				}
 			}
 
-			// Check for active session
-			const activeSessionId = await store.getActiveSessionForTicket(
-				input.ticketId,
-			);
-			if (activeSessionId) {
-				const trackedSession = await store.getTrackedSession(activeSessionId);
-				if (trackedSession) {
-					const storedMessages = await store.getMessages(activeSessionId);
-					const messagesWithParts = await Promise.all(
-						storedMessages.map(async (info) => {
-							const parts = await store.getParts(info.id);
-							return transformMessage(info, parts);
-						}),
-					);
-
-					const status = await store.getStatus(activeSessionId);
-					const allParts = await Promise.all(
-						storedMessages.map((m) => store.getParts(m.id)),
-					);
-					const toolCalls = getCurrentToolCalls(allParts.flat());
-
-					return {
-						messages: messagesWithParts,
-						currentSessionId: activeSessionId,
-						status: status ?? { type: "idle" as const },
-						toolCalls,
-						isNewSession: false,
-					};
-				}
+			if (!sessionId) {
+				return {
+					messages: [],
+					currentSessionId: null,
+					status: { type: "idle" as const },
+					toolCalls: [],
+					isNewSession: false,
+				};
 			}
 
-			// No active session
-			return {
-				messages: [],
-				currentSessionId: undefined,
-				status: { type: "idle" as const },
-				toolCalls: [],
-				isNewSession: true,
-			};
-		}),
-
-	/**
-	 * Send a message to a ticket's chat
-	 */
-	sendTicketMessage: publicProcedure
-		.input(
-			z.object({
-				ticketId: z.string(),
-				message: z.string().min(1),
-				sessionId: z.string().optional(),
-				agent: z.string().optional(),
-			}),
-		)
-		.mutation(async ({ ctx, input }) => {
-			// Get ticket
-			const ticket = await ctx.db.query.tickets.findFirst({
-				where: eq(tickets.id, input.ticketId),
-			});
-
-			if (!ticket) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Ticket not found",
-				});
-			}
-
-			const store = getOpencodeStore();
+			// Fetch session data from SDK
 			const client = getOpencodeClient();
+			try {
+				const [messagesResult, statusResult] = await Promise.all([
+					client.session.messages({ path: { id: sessionId } }),
+					client.session.status(),
+				]);
 
-			let sessionId: string | undefined = input.sessionId ?? undefined;
-
-			// Get or create session
-			if (!sessionId) {
-				const active = await store.getActiveSessionForTicket(input.ticketId);
-				sessionId = active ?? undefined;
-			}
-
-			if (!sessionId) {
-				// Create new session
-				const result = await client.session.create({
-					body: { title: `Ticket: ${ticket.title} (${input.ticketId})` },
-				});
-
-				if (!result.data) {
-					throw new TRPCError({
-						code: "INTERNAL_SERVER_ERROR",
-						message: "Failed to create session",
-					});
+				if (!messagesResult.data) {
+					// Session might not exist on server anymore
+					return {
+						messages: [],
+						currentSessionId: null,
+						status: { type: "idle" as const },
+						toolCalls: [],
+						isNewSession: false,
+					};
 				}
 
-				sessionId = (result.data as Session).id;
-				await store.createTrackedSession(result.data as Session, {
-					ticketId: input.ticketId,
-					sessionType: "chat",
-				});
+				const messages = messagesResult.data.map((m) =>
+					transformMessage(m.info, m.parts),
+				);
+				const allParts = messagesResult.data.flatMap((m) => m.parts);
+				const toolCalls = getCurrentToolCalls(allParts);
+				const status = statusResult.data?.[sessionId] ?? {
+					type: "idle" as const,
+				};
+
+				return {
+					messages,
+					currentSessionId: sessionId,
+					status,
+					toolCalls,
+					isNewSession: false,
+				};
+			} catch (error) {
+				console.error("Failed to fetch session data:", error);
+				// Fallback to empty if session fetch fails (e.g. 404)
+				return {
+					messages: [],
+					currentSessionId: null,
+					status: { type: "idle" as const },
+					toolCalls: [],
+					isNewSession: false,
+				};
 			}
-
-			// Send message
-			const payload = {
-				agent: input.agent ?? "docs-agent",
-				parts: [{ type: "text" as const, text: input.message }],
-				model: env.FAST_MODE
-					? { providerID: "cerebras", modelID: "zai-glm-4.6" }
-					: { providerID: "opencode", modelID: "big-pickle" },
-			};
-
-			const result = await client.session.prompt({
-				path: { id: sessionId },
-				body: payload,
-			});
-
-			if (!result.data) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: "Failed to send message",
-				});
-			}
-
-			// Update status
-			await store.updateStatus(sessionId, { type: "busy" });
-
-			const message = transformMessage(result.data.info, result.data.parts);
-
-			return {
-				...message,
-				sessionId,
-				isNewSession: !input.sessionId,
-			};
 		}),
 });

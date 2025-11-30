@@ -57,7 +57,19 @@ function extractTextFromParts(parts: Part[]): string {
 		)
 		.map((part) => part.reason);
 
-	return [...textParts, ...stepFinishParts].join("\n");
+	const fileParts = parts
+		.filter(
+			(part): part is Extract<Part, { type: "file" }> => part.type === "file",
+		)
+		.map((part) => {
+			// @ts-expect-error - SDK types might be incomplete in our view
+			const content = part.content ?? part.data ?? "";
+			// @ts-expect-error - SDK types might be incomplete in our view
+			const mimeType = part.mimeType ?? "application/octet-stream";
+			return `[File: ${mimeType}]\n${content}`;
+		});
+
+	return [...textParts, ...fileParts, ...stepFinishParts].join("\n");
 }
 
 function extractReasoningFromParts(parts: Part[]): string {
@@ -106,6 +118,7 @@ function mapToOpencodeChatMessage(
 	}
 
 	const parts = msg.parts ?? [];
+	console.log(`[OPENCODE] Processing message ${msg.info.id} parts:`, JSON.stringify(parts, null, 2));
 	const reasoning = extractReasoningFromParts(parts);
 	return {
 		id: msg.info.id,

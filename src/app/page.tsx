@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { CreateTicketDialog } from "@/app/_components/create-ticket-dialog";
 import { TicketModal } from "@/app/_components/ticket-modal";
 import { TicketTable } from "@/app/_components/ticket-table";
@@ -148,6 +149,9 @@ function DashboardContent() {
 			// Store the sessionId for SSE connection when available
 			if (data?.sessionId) {
 				setSessionId(variables.ticketId, data.sessionId);
+				toast.success("Opencode session created", {
+					description: "Analysis has started.",
+				});
 			}
 		},
 		onSettled: (_data, _error, variables) => {
