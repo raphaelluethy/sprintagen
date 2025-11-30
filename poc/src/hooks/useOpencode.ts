@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import type { Session, Message, Part, Event } from "../types";
+import { useCallback, useEffect, useState } from "react";
+import type { Event, Message, Part, Session } from "@opencode-ai/sdk";
 
 interface OpencodeState {
 	session: Session | null;

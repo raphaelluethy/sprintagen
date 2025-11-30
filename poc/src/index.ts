@@ -1,35 +1,26 @@
 import { serve } from "bun";
-import { createOpencodeServer, createOpencodeClient } from "@opencode-ai/sdk";
+import { createOpencodeClient } from "@opencode-ai/sdk";
 import index from "./index.html";
 
 // Global OpenCode client
 let opencodeClient: Awaited<ReturnType<typeof createOpencodeClient>> | null =
 	null;
-let opencodeServerInstance: Awaited<
-	ReturnType<typeof createOpencodeServer>
-> | null = null;
 
-// Initialize OpenCode server
-async function initOpencodeServer() {
+// Initialize OpenCode client
+async function initOpencodeClient() {
 	try {
-		console.log("Starting OpenCode server...");
-		opencodeServerInstance = await createOpencodeServer({
-			hostname: "127.0.0.1",
-			port: 4096,
-		});
-		console.log(`✅ OpenCode server running at ${opencodeServerInstance.url}`);
-
+		console.log("Connecting to OpenCode client...");
 		opencodeClient = createOpencodeClient({
-			baseUrl: opencodeServerInstance.url,
+			baseUrl: "http://127.0.0.1:57092",
 		});
 		console.log("✅ OpenCode client created");
 	} catch (error) {
-		console.error("Failed to start OpenCode server:", error);
+		console.error("Failed to create OpenCode client:", error);
 	}
 }
 
-// Start OpenCode server
-await initOpencodeServer();
+// Start OpenCode client
+await initOpencodeClient();
 
 const server = serve({
 	routes: {
@@ -49,7 +40,7 @@ const server = serve({
 					const session = await opencodeClient.session.create({
 						body: { title: "OpenCode POC Session" },
 					});
-					return Response.json(session.data);
+					return Response.json(session);
 				} catch (error) {
 					return Response.json(
 						{ error: (error as Error).message },
@@ -73,7 +64,6 @@ const server = serve({
 					const result = await opencodeClient.session.prompt({
 						path: { id: req.params.id },
 						body: {
-							agent: body.agent || "build",
 							model: body.model || {
 								providerID: "opencode",
 								modelID: "big-pickle",
@@ -81,7 +71,7 @@ const server = serve({
 							parts: body.parts,
 						},
 					});
-					return Response.json(result.data);
+					return Response.json(result);
 				} catch (error) {
 					return Response.json(
 						{ error: (error as Error).message },
@@ -103,9 +93,8 @@ const server = serve({
 				try {
 					const messages = await opencodeClient.session.messages({
 						path: { id: req.params.id },
-						query: { limit: 100 },
 					});
-					return Response.json(messages.data);
+					return Response.json(messages);
 				} catch (error) {
 					return Response.json(
 						{ error: (error as Error).message },

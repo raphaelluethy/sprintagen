@@ -31,14 +31,11 @@ services:
     ports:
       - "4096:4096"
     environment:
-      # Set GIT_REPO_URL to clone a repository (or mount a volume instead)
-      - GIT_REPO_URL=${GIT_REPO_URL:-https://github.com/sst/opencode}
       # Cerebras API key for the AI provider
       - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
     volumes:
-      # Mount a local repository read-only (alternative to GIT_REPO_URL)
-      # Uncomment and adjust path as needed:
-      # - ./my-repo:/workspace/repo:ro
+      # Mount local repository for analysis (volume mount instead of cloning)
+      - ./opencode_repo:/workspace/repo:ro
 
       # Persist opencode config and auth tokens
       - opencode_data:/root/.opencode
