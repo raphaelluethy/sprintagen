@@ -47,3 +47,6 @@ yarn-error.log*
 
 # external repos
 /opencode_repo
+
+# event logs
+/logs

@@ -71,13 +71,22 @@ function mapToOpencodeChatMessage(
 	// Debug logging for empty text
 	if (msg.parts && msg.parts.length > 0) {
 		const textParts = msg.parts.filter((p) => p.type === "text");
-		if (textParts.length === 0 && msg.parts.some((p) => p.type !== "tool" && p.type !== "reasoning")) {
-			console.log(`[POLLER] Message ${msg.info.id} has parts but no text/tool/reasoning:`, JSON.stringify(msg.parts));
+		if (
+			textParts.length === 0 &&
+			msg.parts.some((p) => p.type !== "tool" && p.type !== "reasoning")
+		) {
+			console.log(
+				`[POLLER] Message ${msg.info.id} has parts but no text/tool/reasoning:`,
+				JSON.stringify(msg.parts),
+			);
 		}
-        // Log all parts for assistant messages to be sure
-        if (msg.info.role === 'assistant') {
-             console.log(`[POLLER] Assistant message ${msg.info.id} parts:`, JSON.stringify(msg.parts));
-        }
+		// Log all parts for assistant messages to be sure
+		if (msg.info.role === "assistant") {
+			console.log(
+				`[POLLER] Assistant message ${msg.info.id} parts:`,
+				JSON.stringify(msg.parts),
+			);
+		}
 	}
 
 	const parts = msg.parts ?? [];

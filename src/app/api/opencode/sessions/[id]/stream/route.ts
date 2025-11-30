@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
-import { createSubscriber, isRedisAvailable, RedisKeys } from "@/server/redis";
-import { getSessionState } from "@/server/tickets/session-state";
+import { createSubscriber, isRedisAvailable } from "@/server/redis";
+import { getOpencodeStore, OpencodeKeys } from "@/server/redis/opencode-store";
 
 interface RouteParams {
 	params: Promise<{ id: string }>;
@@ -9,14 +9,13 @@ interface RouteParams {
 /**
  * GET /api/opencode/sessions/[id]/stream
  * Server-Sent Events endpoint for real-time session updates
- * Falls back to polling-style updates if Redis is not available
+ * Uses the new event-driven architecture with SDK events
  */
 export async function GET(req: NextRequest, context: RouteParams) {
 	const { id: sessionId } = await context.params;
 
 	// Check if Redis is available
 	if (!isRedisAvailable()) {
-		// Return a simple response indicating SSE is not available
 		return new Response(
 			`data: ${JSON.stringify({ type: "error", error: "Real-time updates not available - Redis not connected" })}\n\n`,
 			{
@@ -52,19 +51,47 @@ export async function GET(req: NextRequest, context: RouteParams) {
 				}
 			};
 
-			// Send initial state immediately
+			// Get the store
+			const store = getOpencodeStore();
+
+			// Send initial state from the store
 			try {
-				const initialState = await getSessionState(sessionId);
-				if (initialState) {
-					sendEvent(
-						`data: ${JSON.stringify({ type: "init", state: initialState })}\n\n`,
+				const trackedSession = await store.getTrackedSession(sessionId);
+				const messages = await store.getMessages(sessionId);
+				const status = await store.getStatus(sessionId);
+
+				// Get parts for all messages
+				const messagesWithParts = await Promise.all(
+					messages.map(async (info) => {
+						const parts = await store.getParts(info.id);
+						return { info, parts };
+					}),
+				);
+
+				// Extract current tool calls
+				const currentToolCalls = messagesWithParts
+					.flatMap((m) => m.parts)
+					.filter(
+						(part): part is Extract<typeof part, { type: "tool" }> =>
+							part.type === "tool" &&
+							(part.state.status === "pending" ||
+								part.state.status === "running"),
 					);
-				} else {
-					// No state found - send empty state
-					sendEvent(
-						`data: ${JSON.stringify({ type: "init", state: null })}\n\n`,
-					);
-				}
+
+				const initialState = {
+					sessionId,
+					ticketId: trackedSession?.ticketId,
+					sessionType: trackedSession?.sessionType ?? "chat",
+					status: status?.type ?? "idle",
+					messages: messagesWithParts,
+					currentToolCalls,
+					startedAt: trackedSession?.startedAt,
+					updatedAt: trackedSession?.updatedAt,
+				};
+
+				sendEvent(
+					`data: ${JSON.stringify({ type: "init", state: initialState })}\n\n`,
+				);
 			} catch (error) {
 				console.error(
 					`[SSE] Error getting initial state for ${sessionId}:`,
@@ -100,8 +127,8 @@ export async function GET(req: NextRequest, context: RouteParams) {
 					);
 				});
 
-				// Subscribe to Redis pub/sub channel
-				const channel = RedisKeys.updates(sessionId);
+				// Subscribe to session events channel (from event listener)
+				const channel = OpencodeKeys.sessionEvents(sessionId);
 				await subscriber.subscribe(channel);
 
 				console.log(
@@ -111,7 +138,16 @@ export async function GET(req: NextRequest, context: RouteParams) {
 				// Handle messages from Redis pub/sub
 				subscriber.on("message", (ch, message) => {
 					if (ch === channel && !isClosed) {
-						sendEvent(`data: ${message}\n\n`);
+						try {
+							const data = JSON.parse(message);
+							// Forward the SDK event directly
+							sendEvent(
+								`data: ${JSON.stringify({ type: "event", ...data })}\n\n`,
+							);
+						} catch {
+							// Forward raw message if not JSON
+							sendEvent(`data: ${message}\n\n`);
+						}
 					}
 				});
 
