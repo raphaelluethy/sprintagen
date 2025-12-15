@@ -93,6 +93,18 @@ export function TicketAgentTab({
 				open &&
 				activeTab === "agent-chat" &&
 				!!opencodeChatSessionId,
+			refetchInterval: (query) => {
+				const data = query.state.data;
+				if (!data) return 1000;
+
+				// Check if any tool calls are still running
+				const hasRunningTools = data.toolCalls?.some(
+					(t) => t.state.status === "pending" || t.state.status === "running",
+				);
+
+				// Poll every second while tools are running, otherwise stop
+				return hasRunningTools ? 1000 : false;
+			},
 		},
 	);
 
