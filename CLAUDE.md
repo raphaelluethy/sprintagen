@@ -106,3 +106,12 @@ Optional:
 - **Dev auth bypass:** In development, `protectedProcedure` uses a mock user when unauthenticated
 - **Polling-based sync:** Ticket sync uses polling (Redis/SSE removed in recent refactor)
 - Path alias: `@/*` maps to `./src/*`
+
+## btca
+
+Trigger: user says "use btca" (for codebase/docs questions).
+
+Run:
+- btca ask -t <tech> -q "<question>"
+
+Available <tech>: opencode, tailwindcss
