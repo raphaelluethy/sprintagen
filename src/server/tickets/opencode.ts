@@ -10,6 +10,10 @@ import { env } from "@/env";
 import { getOpencodeClient } from "@/lib/opencode-client";
 import { db } from "@/server/db";
 import { tickets } from "@/server/db/schema";
+import {
+	transformMessage,
+	type TransformedMessage,
+} from "@/server/opencode/message-utils";
 
 export type MessagePart = Part;
 export type { ToolPart, ReasoningPart };
@@ -19,20 +23,8 @@ export type OpencodeMessage = {
 	parts: Part[];
 };
 
-export interface OpencodeChatMessage {
-	id: string;
-	role: "user" | "assistant";
-	text: string;
-	createdAt: Date;
-	model?: string;
-	toolCalls?: {
-		toolName: string;
-		toolCallId: string;
-	}[];
-	parts?: MessagePart[];
-	reasoning?: string;
-	sessionId?: string;
-}
+// Re-export for backwards compatibility
+export type OpencodeChatMessage = TransformedMessage;
 
 export type OpencodeResult<T> =
 	| { success: true; data: T }
@@ -43,73 +35,6 @@ interface TicketMetadata {
 	[key: string]: unknown;
 }
 
-function extractTextFromParts(parts: Part[]): string {
-	const textParts = parts
-		.filter(
-			(part): part is Extract<Part, { type: "text" }> => part.type === "text",
-		)
-		.map((part) => part.text);
-
-	const stepFinishParts = parts
-		.filter(
-			(part): part is Extract<Part, { type: "step-finish" }> =>
-				part.type === "step-finish",
-		)
-		.map((part) => part.reason);
-
-	const fileParts = parts
-		.filter(
-			(part): part is Extract<Part, { type: "file" }> => part.type === "file",
-		)
-		.map((part) => {
-			// @ts-expect-error - SDK types might be incomplete in our view
-			const content = part.content ?? part.data ?? "";
-			// @ts-expect-error - SDK types might be incomplete in our view
-			const mimeType = part.mimeType ?? "application/octet-stream";
-			return `[File: ${mimeType}]\n${content}`;
-		});
-
-	return [...textParts, ...fileParts, ...stepFinishParts].join("\n");
-}
-
-function extractReasoningFromParts(parts: Part[]): string {
-	return parts
-		.filter(
-			(part): part is Extract<Part, { type: "reasoning" }> =>
-				part.type === "reasoning",
-		)
-		.map((part) => part.text)
-		.join("\n")
-		.trim();
-}
-
-function extractToolCalls(
-	parts: Part[],
-): { toolName: string; toolCallId: string }[] {
-	return parts
-		.filter((part): part is ToolPart => part.type === "tool")
-		.map((part) => ({ toolName: part.tool, toolCallId: part.callID }));
-}
-
-function getModelLabel(message: Message): string | undefined {
-	if ("model" in message && message.model) {
-		return `${message.model.providerID}/${message.model.modelID}`;
-	}
-
-	if ("providerID" in message && "modelID" in message) {
-		return `${message.providerID}/${message.modelID}`;
-	}
-
-	return undefined;
-}
-
-function getCreatedAt(message: Message): Date {
-	const time =
-		(message as { time?: { created?: number; completed?: number } }).time ?? {};
-	const timestamp = time.created ?? time.completed ?? Date.now();
-	return new Date(timestamp);
-}
-
 function mapToOpencodeChatMessage(
 	msg: OpencodeMessage | null | undefined,
 ): OpencodeChatMessage | null {
@@ -117,23 +42,7 @@ function mapToOpencodeChatMessage(
 		return null;
 	}
 
-	const parts = msg.parts ?? [];
-	console.log(
-		`[OPENCODE] Processing message ${msg.info.id} parts:`,
-		JSON.stringify(parts, null, 2),
-	);
-	const reasoning = extractReasoningFromParts(parts);
-	return {
-		id: msg.info.id,
-		role: msg.info.role,
-		text: extractTextFromParts(parts),
-		createdAt: getCreatedAt(msg.info),
-		model: getModelLabel(msg.info),
-		toolCalls: extractToolCalls(parts),
-		parts: parts.length > 0 ? parts : undefined,
-		reasoning: reasoning || undefined,
-		sessionId: msg.info.sessionID,
-	};
+	return transformMessage(msg.info, msg.parts ?? []);
 }
 
 export interface OpencodeMessagesResult {

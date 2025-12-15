@@ -1,111 +1,108 @@
----
-description: Use Bun instead of Node.js, npm, pnpm, or vite.
-globs: "*.ts, *.tsx, *.html, *.css, *.js, *.jsx, package.json"
-alwaysApply: false
----
+# CLAUDE.md
 
-Default to using Bun instead of Node.js.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Bun automatically loads .env, so don't use dotenv.
+## Project Overview
 
-## APIs
+Sprintagen is an AI-powered ticket management system that aggregates tickets from multiple sources (Jira, Linear, Docker, manual), ranks them using AI, and provides code analysis capabilities via Opencode integration.
 
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
+## Tech Stack
 
-## Testing
+- **Runtime:** Bun (not Node.js)
+- **Framework:** Next.js 15 (App Router) with React 19
+- **API:** tRPC v11 with React Query
+- **Database:** SQLite via Drizzle ORM (LibSQL/Turso client)
+- **Auth:** Better Auth with GitHub OAuth
+- **AI:** Vercel AI SDK with Cerebras and OpenRouter providers
+- **UI:** Tailwind CSS 4 + Radix UI components
+- **Linting:** Biome
 
-Use `bun test` to run tests.
+## Commands
 
-```ts#index.test.ts
-import { test, expect } from "bun:test";
+```bash
+# Development
+bun run dev          # Start Next.js dev server with Turbo
 
-test("hello world", () => {
-  expect(1).toBe(1);
-});
+# Build & Production
+bun run build        # Production build
+bun run start        # Start production server
+bun run preview      # Build and start locally
+
+# Code Quality
+bun run check        # Biome lint & format check
+bun run check:write  # Biome with safe auto-fixes
+bun run format       # Format code
+bun run typecheck    # TypeScript check
+
+# Database
+bun run db:generate  # Generate Drizzle migrations
+bun run db:migrate   # Apply migrations
+bun run db:push      # Push schema directly (dev)
+bun run db:seed      # Seed sample data
+bun run db:studio    # Open Drizzle Studio UI
+
+# Docker
+make rebuild         # Rebuild and restart containers
+make down            # Stop and clean up containers
 ```
 
-## Frontend
+## Architecture
 
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
+### Directory Structure
 
-Server:
-
-```ts#index.ts
-import index from "./index.html"
-
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
+```
+src/
+├── app/                    # Next.js App Router pages
+│   ├── _components/        # Page-specific components (ticket-modal/, ticket-table/)
+│   ├── api/
+│   │   ├── auth/[...all]/  # Better Auth routes
+│   │   └── trpc/[trpc]/    # tRPC handler
+│   └── layout.tsx          # Root layout with providers
+│
+├── components/ui/          # Reusable Radix UI components
+│
+├── server/
+│   ├── ai/                 # AI providers (cerebras.ts, openrouter.ts, prompts.ts)
+│   ├── api/                # tRPC routers
+│   │   ├── root.ts         # Router composition
+│   │   ├── trpc.ts         # Context, procedures, middleware
+│   │   └── routers/        # ticket.ts, opencode.ts
+│   ├── db/                 # Drizzle schema and client
+│   └── tickets/
+│       └── providers/      # Jira, Linear, Docker integrations (base.ts pattern)
+│
+├── trpc/                   # tRPC client setup (react.tsx, query-client.ts)
+├── hooks/                  # Custom React hooks
+└── env.js                  # Environment validation (t3-oss)
 ```
 
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
+### Key Patterns
 
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
+**Ticket Providers:** New providers extend `src/server/tickets/providers/base.ts` interface. See jira.ts, linear.ts, docker.ts for examples.
 
-With the following `frontend.tsx`:
+**tRPC Procedures:** Add to `src/server/api/routers/` and register in `root.ts`. Use `protectedProcedure` for authenticated routes.
 
-```tsx#frontend.tsx
-import React from "react";
+**AI Provider Selection:** Logic in `src/server/ai/index.ts` chooses between Cerebras/OpenRouter based on config.
 
-// import .css files directly and it works
-import './index.css';
+**Database Schema:** All tables prefixed with `sprintagen_` in `src/server/db/schema.ts`. Run `db:generate` after changes.
 
-import { createRoot } from "react-dom/client";
+## Environment Variables
 
-const root = createRoot(document.body);
+Required in `.env`:
+- `DATABASE_URL` - SQLite path (default: `file:./db.sqlite`)
+- `BETTER_AUTH_SECRET` - Auth session secret
+- `BETTER_AUTH_GITHUB_CLIENT_ID` / `BETTER_AUTH_GITHUB_CLIENT_SECRET` - GitHub OAuth
 
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
+Optional:
+- `CEREBRAS_API_KEY` / `OPENROUTER_API_KEY` - AI providers
+- `JIRA_BASE_URL`, `JIRA_API_TOKEN`, `JIRA_PROJECT_KEY` - Jira integration
+- `LINEAR_API_KEY` - Linear integration
+- `OPENCODE_SERVER_URL` - Opencode service (default: `http://localhost:4096`)
+- `FAST_MODE` - Use fast paid models
 
-root.render(<Frontend />);
-```
+## Development Notes
 
-Then, run index.ts
-
-```sh
-bun --hot ./index.ts
-```
-
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.md`.
+- **No test framework** is currently configured
+- **Dev auth bypass:** In development, `protectedProcedure` uses a mock user when unauthenticated
+- **Polling-based sync:** Ticket sync uses polling (Redis/SSE removed in recent refactor)
+- Path alias: `@/*` maps to `./src/*`

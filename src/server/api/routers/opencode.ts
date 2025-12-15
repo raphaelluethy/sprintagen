@@ -5,7 +5,7 @@
  * message handling, and real-time updates.
  */
 
-import type { Message, Part, Session, ToolPart } from "@opencode-ai/sdk";
+import type { Part, Session } from "@opencode-ai/sdk";
 import { TRPCError } from "@trpc/server";
 import dedent from "dedent";
 import { eq } from "drizzle-orm";
@@ -14,92 +14,10 @@ import { env } from "@/env";
 import { getOpencodeClient } from "@/lib/opencode-client";
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
 import { tickets } from "@/server/db/schema";
-
-/**
- * Helper to extract text from message parts
- */
-function extractTextFromParts(parts: Part[]): string {
-	const textParts = parts
-		.filter(
-			(part): part is Extract<Part, { type: "text" }> => part.type === "text",
-		)
-		.map((part) => part.text);
-
-	const stepFinishParts = parts
-		.filter(
-			(part): part is Extract<Part, { type: "step-finish" }> =>
-				part.type === "step-finish",
-		)
-		.map((part) => part.reason);
-
-	return [...textParts, ...stepFinishParts].join("\n");
-}
-
-/**
- * Helper to extract reasoning from message parts
- */
-function extractReasoningFromParts(parts: Part[]): string {
-	return parts
-		.filter(
-			(part): part is Extract<Part, { type: "reasoning" }> =>
-				part.type === "reasoning",
-		)
-		.map((part) => part.text)
-		.join("\n")
-		.trim();
-}
-
-/**
- * Helper to extract tool calls from message parts
- */
-function extractToolCalls(
-	parts: Part[],
-): { toolName: string; toolCallId: string }[] {
-	return parts
-		.filter((part): part is ToolPart => part.type === "tool")
-		.map((part) => ({ toolName: part.tool, toolCallId: part.callID }));
-}
-
-/**
- * Helper to get model label from message
- */
-function getModelLabel(message: Message): string | undefined {
-	if ("providerID" in message && "modelID" in message) {
-		return `${message.providerID}/${message.modelID}`;
-	}
-	return undefined;
-}
-
-/**
- * Transform SDK message to chat message format
- */
-function transformMessage(info: Message, parts: Part[]) {
-	const time = info.time as { created?: number; completed?: number };
-	const reasoning = extractReasoningFromParts(parts);
-
-	return {
-		id: info.id,
-		role: info.role,
-		text: extractTextFromParts(parts),
-		createdAt: new Date(time.created ?? Date.now()),
-		model: getModelLabel(info),
-		toolCalls: extractToolCalls(parts),
-		parts: parts.length > 0 ? parts : undefined,
-		reasoning: reasoning || undefined,
-		sessionId: info.sessionID,
-	};
-}
-
-/**
- * Helper to get current tool calls from parts
- */
-function getCurrentToolCalls(parts: Part[]): ToolPart[] {
-	return parts.filter(
-		(part): part is ToolPart =>
-			part.type === "tool" &&
-			(part.state.status === "pending" || part.state.status === "running"),
-	);
-}
+import {
+	getCurrentToolCalls,
+	transformMessage,
+} from "@/server/opencode/message-utils";
 
 export const opencodeRouter = createTRPCRouter({
 	// ========================================================================
