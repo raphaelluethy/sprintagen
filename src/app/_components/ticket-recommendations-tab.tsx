@@ -17,18 +17,7 @@ import {
 	OpencodeReasoningDisplay,
 	OpencodeToolCallDisplay,
 } from "./opencode-tool-call";
-
-interface OpencodeChatMessage {
-	id: string;
-	role: "user" | "assistant";
-	text: string;
-	createdAt: Date;
-	model?: string;
-	toolCalls?: { toolName: string; toolCallId: string }[];
-	parts?: MessagePart[];
-	reasoning?: string;
-	sessionId?: string;
-}
+import type { OpencodeChatMessage } from "./types";
 
 // Live analysis progress component for Ask Opencode
 function LiveAnalysisProgress({

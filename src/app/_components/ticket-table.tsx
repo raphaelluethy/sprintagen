@@ -23,6 +23,7 @@ import type {
 	tickets,
 } from "@/server/db/schema";
 import { api } from "@/trpc/react";
+import { PRIORITY_STYLES, STATUS_STYLES } from "./constants";
 
 type Ticket = typeof tickets.$inferSelect & {
 	recommendations?: (typeof ticketRecommendations.$inferSelect)[];
@@ -43,20 +44,6 @@ interface TicketTableProps {
 	pendingAskTicketIds: Set<string>;
 }
 
-const priorityStyles: Record<string, string> = {
-	urgent: "bg-foreground text-background",
-	high: "bg-foreground/80 text-background",
-	medium: "bg-secondary text-secondary-foreground",
-	low: "bg-secondary/60 text-muted-foreground",
-};
-
-const statusStyles: Record<string, string> = {
-	open: "bg-secondary text-secondary-foreground",
-	in_progress: "bg-foreground/10 text-foreground border border-border/60",
-	review: "bg-foreground/10 text-foreground border border-border/60",
-	done: "bg-secondary/60 text-muted-foreground",
-	closed: "bg-secondary/40 text-muted-foreground",
-};
 
 export function TicketTable({
 	onTicketSelect,
@@ -296,7 +283,7 @@ export function TicketTable({
 										</TableCell>
 										<TableCell>
 											<Badge
-												className={`font-normal text-xs ${statusStyles[ticket.status]}`}
+												className={`font-normal text-xs ${STATUS_STYLES[ticket.status]}`}
 												variant="secondary"
 											>
 												{ticket.status.replace("_", " ")}
@@ -304,7 +291,7 @@ export function TicketTable({
 										</TableCell>
 										<TableCell>
 											<Badge
-												className={`font-normal text-xs ${priorityStyles[ticket.priority ?? "medium"]}`}
+												className={`font-normal text-xs ${PRIORITY_STYLES[ticket.priority ?? "medium"]}`}
 												variant="secondary"
 											>
 												{ticket.priority}

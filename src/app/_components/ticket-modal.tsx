@@ -18,6 +18,7 @@ import type {
 	tickets,
 } from "@/server/db/schema";
 import { api } from "@/trpc/react";
+import { PRIORITY_STYLES, STATUS_STYLES } from "./constants";
 import { TicketAgentTab } from "./ticket-agent-tab";
 import { TicketChatTab } from "./ticket-chat-tab";
 import { TicketDetailsTab } from "./ticket-details-tab";
@@ -43,20 +44,6 @@ interface TicketModalProps {
 	getPendingSessionId: (ticketId: string) => string | null;
 }
 
-const priorityStyles: Record<string, string> = {
-	urgent: "bg-foreground text-background",
-	high: "bg-foreground/80 text-background",
-	medium: "bg-secondary text-secondary-foreground",
-	low: "bg-secondary/60 text-muted-foreground",
-};
-
-const statusStyles: Record<string, string> = {
-	open: "bg-secondary text-secondary-foreground",
-	in_progress: "bg-foreground/10 text-foreground border border-border/60",
-	review: "bg-foreground/10 text-foreground border border-border/60",
-	done: "bg-secondary/60 text-muted-foreground",
-	closed: "bg-secondary/40 text-muted-foreground",
-};
 
 export function TicketModal({
 	ticket,
@@ -226,13 +213,13 @@ export function TicketModal({
 							<h2 className="truncate font-semibold text-lg">{ticket.title}</h2>
 							<div className="mt-2 flex flex-wrap items-center gap-2">
 								<Badge
-									className={`font-normal text-xs ${statusStyles[ticket.status]}`}
+									className={`font-normal text-xs ${STATUS_STYLES[ticket.status]}`}
 									variant="secondary"
 								>
 									{ticket.status.replace("_", " ")}
 								</Badge>
 								<Badge
-									className={`font-normal text-xs ${priorityStyles[ticket.priority ?? "medium"]}`}
+									className={`font-normal text-xs ${PRIORITY_STYLES[ticket.priority ?? "medium"]}`}
 									variant="secondary"
 								>
 									{ticket.priority}
