@@ -7,7 +7,7 @@ export interface TransformedMessage {
 	createdAt: Date;
 	model?: string;
 	toolCalls?: { toolName: string; toolCallId: string }[];
-	parts?: Part[];
+	parts: Part[]; // Always included, even if empty
 	reasoning?: string;
 	sessionId?: string;
 }
@@ -102,7 +102,7 @@ export function transformMessage(
 		createdAt: getCreatedAt(info),
 		model: getModelLabel(info),
 		toolCalls: extractToolCalls(parts),
-		parts: parts.length > 0 ? parts : undefined,
+		parts: parts, // Always include parts array, even if empty
 		reasoning: reasoning || undefined,
 		sessionId: info.sessionID,
 	};

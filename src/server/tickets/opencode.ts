@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 import { env } from "@/env";
 import { getOpencodeClient } from "@/lib/opencode-client";
 import { db } from "@/server/db";
-import { tickets } from "@/server/db/schema";
+import { opencodeSessionsTable, tickets } from "@/server/db/schema";
 import {
 	transformMessage,
 	type TransformedMessage,
@@ -484,4 +484,104 @@ export async function askOpencodeQuestion(
 			isNewSession: true,
 		},
 	};
+}
+
+/**
+ * Persist OpenCode session data to the database
+ * This allows historical viewing of sessions and their messages
+ */
+export async function persistOpencodeSession(
+	sessionId: string,
+	ticketId: string,
+	sessionType: "chat" | "ask" | "admin",
+	status: "pending" | "running" | "completed" | "error",
+	messages: OpencodeChatMessage[],
+	errorMessage?: string,
+): Promise<OpencodeResult<{ persisted: boolean }>> {
+	try {
+		const now = new Date();
+
+		// Check if session already exists
+		const existing = await db.query.opencodeSessionsTable.findFirst({
+			where: eq(opencodeSessionsTable.id, sessionId),
+		});
+
+		if (existing) {
+			// Update existing session
+			await db
+				.update(opencodeSessionsTable)
+				.set({
+					status,
+					messages: messages as unknown[],
+					completedAt:
+						status === "completed" || status === "error" ? now : null,
+					errorMessage: errorMessage ?? null,
+				})
+				.where(eq(opencodeSessionsTable.id, sessionId));
+		} else {
+			// Insert new session
+			await db.insert(opencodeSessionsTable).values({
+				id: sessionId,
+				ticketId,
+				sessionType,
+				status,
+				messages: messages as unknown[],
+				startedAt: now,
+				completedAt: status === "completed" || status === "error" ? now : null,
+				errorMessage: errorMessage ?? null,
+				metadata: {},
+			});
+		}
+
+		console.log(
+			`[OPENCODE] Persisted session ${sessionId} with ${messages.length} messages (status: ${status})`,
+		);
+		return { success: true, data: { persisted: true } };
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Unknown error occurred";
+		console.error(`[OPENCODE] Failed to persist session ${sessionId}:`, error);
+		return { success: false, error: message };
+	}
+}
+
+/**
+ * Get all persisted sessions for a ticket
+ */
+export async function getPersistedSessions(ticketId: string): Promise<
+	OpencodeResult<
+		{
+			sessionId: string;
+			sessionType: "chat" | "ask" | "admin";
+			status: "pending" | "running" | "completed" | "error";
+			messages: OpencodeChatMessage[];
+			startedAt: Date;
+			completedAt: Date | null;
+			errorMessage: string | null;
+		}[]
+	>
+> {
+	try {
+		const sessions = await db.query.opencodeSessionsTable.findMany({
+			where: eq(opencodeSessionsTable.ticketId, ticketId),
+			orderBy: (t, { desc }) => desc(t.startedAt),
+		});
+
+		return {
+			success: true,
+			data: sessions.map((s) => ({
+				sessionId: s.id,
+				sessionType: s.sessionType,
+				status: s.status,
+				messages: (s.messages ?? []) as OpencodeChatMessage[],
+				startedAt: s.startedAt,
+				completedAt: s.completedAt,
+				errorMessage: s.errorMessage,
+			})),
+		};
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Unknown error occurred";
+		return { success: false, error: message };
+	}
 }

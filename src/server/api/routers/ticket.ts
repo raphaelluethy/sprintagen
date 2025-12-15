@@ -29,8 +29,10 @@ import {
 	checkOpencodeHealth,
 	createNewOpencodeSessionForTicket,
 	getOpencodeMessages,
+	getPersistedSessions,
 	lookupExistingOpencodeSession,
 	type OpencodeChatMessage,
+	persistOpencodeSession,
 	sendOpencodeMessage,
 } from "@/server/tickets/opencode";
 import { getProviderRegistry } from "@/server/tickets/provider-registry";
@@ -705,13 +707,41 @@ export const ticketRouter = createTRPCRouter({
 				});
 			}
 
+			// Extract tool calls from message parts
+			const allParts = result.data.messages.flatMap((m) => m.parts ?? []);
+			const toolParts = allParts.filter(
+				(p): p is import("@opencode-ai/sdk").ToolPart => p.type === "tool",
+			);
+
+			// Persist session data for history (don't await - fire and forget)
+			if (result.data.currentSessionId && result.data.messages.length > 0) {
+				// Check if any tool is still running
+				const hasRunningTools = toolParts.some(
+					(t) => t.state.status === "pending" || t.state.status === "running",
+				);
+				const sessionStatus = hasRunningTools ? "running" : "completed";
+
+				persistOpencodeSession(
+					result.data.currentSessionId,
+					input.ticketId,
+					"chat",
+					sessionStatus,
+					result.data.messages,
+				).catch((err) => {
+					console.error(
+						`[OPENCODE] Failed to persist session ${result.data.currentSessionId}:`,
+						err,
+					);
+				});
+			}
+
 			// Return messages with session metadata
 			return {
 				messages: result.data.messages,
 				currentSessionId: result.data.currentSessionId,
 				isNewSession: result.data.isNewSession,
 				status: "completed" as const, // We don't have granular status without polling/events
-				toolCalls: [],
+				toolCalls: toolParts,
 			};
 		}),
 
@@ -767,20 +797,23 @@ export const ticketRouter = createTRPCRouter({
 	 */
 	getSessionHistory: publicProcedure
 		.input(z.object({ ticketId: z.string() }))
-		.query(
-			async (): Promise<
-				{
-					messages: OpencodeChatMessage[];
-					sessionId: string;
-					status: "completed" | "running" | "error" | "pending";
-					createdAt: Date;
-				}[]
-			> => {
-				// With Redis removed, we don't have historical session tracking yet.
-				// Return empty array for now.
-				return [];
-			},
-		),
+		.query(async ({ input }) => {
+			const result = await getPersistedSessions(input.ticketId);
+
+			if (!result.success) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: result.error,
+				});
+			}
+
+			return result.data.map((session) => ({
+				sessionId: session.sessionId,
+				status: session.status,
+				createdAt: session.startedAt,
+				messages: session.messages,
+			}));
+		}),
 
 	/**
 	 * Ask Opencode about implementing a ticket
