@@ -1,5 +1,4 @@
 import { opencodeRouter } from "@/server/api/routers/opencode";
-import { postRouter } from "@/server/api/routers/post";
 import { ticketRouter } from "@/server/api/routers/ticket";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
@@ -10,7 +9,6 @@ import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
  */
 export const appRouter = createTRPCRouter({
 	opencode: opencodeRouter,
-	post: postRouter,
 	ticket: ticketRouter,
 });
 
