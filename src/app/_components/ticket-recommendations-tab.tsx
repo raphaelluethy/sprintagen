@@ -8,14 +8,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TabsContent } from "@/components/ui/tabs";
 import type {
-	MessagePart,
 	ReasoningPart,
 	ToolPart,
 } from "@/server/tickets/opencode";
 import { api } from "@/trpc/react";
 import {
 	OpencodeReasoningDisplay,
-	OpencodeToolCallDisplay,
+	OpencodeStepsCollapsible,
 } from "./opencode-tool-call";
 import type { OpencodeChatMessage } from "./types";
 
@@ -245,8 +244,8 @@ function RecommendationsList({
 		);
 	}
 
-	// Reverse to show oldest to newest (bottom)
-	const reversedItems = [...allItems].reverse();
+	// Items are already sorted newest first from API (descending order)
+	const sortedItems = allItems;
 
 	return (
 		<div className="space-y-6">
@@ -264,7 +263,7 @@ function RecommendationsList({
 			)}
 
 			<div className="relative space-y-8 before:absolute before:top-2 before:left-[7px] before:h-[calc(100%-16px)] before:w-px before:bg-border/60">
-				{reversedItems.map((item) => (
+				{sortedItems.map((item) => (
 					<div className="relative pl-8" key={item.id}>
 						{/* Timeline dot */}
 						<div className="absolute top-2 left-0 h-3.5 w-3.5 rounded-full border-2 border-background bg-primary ring-4 ring-background" />
@@ -402,24 +401,27 @@ export function TicketRecommendationsTab({
 		{ ticketId },
 		{
 			enabled: !askOpencodeInFlight,
-			staleTime: 30000,
+			staleTime: 5000, // Reduce to 5s to pick up new sessions faster
+			refetchOnMount: "always", // Always refetch when component mounts or re-enables
 		},
 	);
 
 	const archivedSessions = useMemo(
 		() =>
-			(sessionHistoryQuery.data ?? []).map((session) => ({
-				...session,
-				id: session.sessionId,
-				sessionType: "chat" as const,
-				startedAt: session.createdAt.getTime(),
-				messages: ((session.messages ?? []) as OpencodeChatMessage[]).map(
-					(message) => ({
-						...message,
-						createdAt: new Date(message.createdAt),
-					}),
-				),
-			})),
+			(sessionHistoryQuery.data ?? [])
+				.map((session) => ({
+					...session,
+					id: session.sessionId,
+					sessionType: "chat" as const,
+					startedAt: session.createdAt.getTime(),
+					messages: ((session.messages ?? []) as OpencodeChatMessage[]).map(
+						(message) => ({
+							...message,
+							createdAt: new Date(message.createdAt),
+						}),
+					),
+				}))
+				.sort((a, b) => b.startedAt - a.startedAt),
 		[sessionHistoryQuery.data],
 	);
 
@@ -484,7 +486,8 @@ export function TicketRecommendationsTab({
 							<p className="text-destructive text-xs">
 								Unable to load previous Agent sessions.
 							</p>
-						) : archivedSessions.length === 0 ? (
+						) : sessionHistoryQuery.isLoading ? null : archivedSessions.length ===
+							0 ? (
 							<p className="text-muted-foreground text-sm">
 								No previous Agent sessions for this ticket.
 							</p>
@@ -549,21 +552,16 @@ export function TicketRecommendationsTab({
 																		/>
 																	)}
 
-																	{!isUser && toolParts.length > 0 && (
-																		<div className="mb-3">
-																			{toolParts.map((tool) => (
-																				<OpencodeToolCallDisplay
-																					key={tool.id}
-																					tool={tool}
-																				/>
-																			))}
-																		</div>
-																	)}
-
 																	{msg.text && (
 																		<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
 																			<Markdown>{msg.text}</Markdown>
 																		</div>
+																	)}
+
+																	{!isUser && toolParts.length > 0 && (
+																		<OpencodeStepsCollapsible
+																			toolParts={toolParts}
+																		/>
 																	)}
 
 																	<div className="mt-1 flex items-center gap-2 text-xs tabular-nums opacity-50">

@@ -160,6 +160,14 @@ function DashboardContent() {
 			// Invalidate ticket data to refresh recommendations
 			void utils.ticket.byId.invalidate({ id: variables.ticketId });
 			void utils.ticket.list.invalidate();
+			// Invalidate recommendations so the new one shows up
+			void utils.ticket.getRecommendations.invalidate({
+				ticketId: variables.ticketId,
+			});
+			// Also invalidate session history
+			void utils.ticket.getSessionHistory.invalidate({
+				ticketId: variables.ticketId,
+			});
 			// Also refetch pending inquiries to get updated state
 			void refetchPendingSessions();
 		},

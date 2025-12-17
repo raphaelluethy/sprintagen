@@ -44,7 +44,6 @@ interface TicketTableProps {
 	pendingAskTicketIds: Set<string>;
 }
 
-
 export function TicketTable({
 	onTicketSelect,
 	viewMode,

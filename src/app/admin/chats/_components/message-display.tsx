@@ -1,15 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import type { Message } from "@opencode-ai/sdk";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
-	type MessageWithParts,
-	getTextContent,
 	getReasoningContent,
+	getTextContent,
 	getToolCalls,
-	isUserMessage,
 	isAssistantMessage,
+	isUserMessage,
+	type MessageWithParts,
 } from "@/lib/opencode-utils";
 import { ToolCallDisplay } from "./tool-call-display";
 

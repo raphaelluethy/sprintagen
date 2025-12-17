@@ -16,7 +16,7 @@ import type {
 import { api } from "@/trpc/react";
 import {
 	OpencodeReasoningDisplay,
-	OpencodeToolCallDisplay,
+	OpencodeStepsCollapsible,
 } from "./opencode-tool-call";
 import type { OpencodeChatMessage } from "./types";
 
@@ -97,13 +97,16 @@ export function TicketAgentTab({
 				const data = query.state.data;
 				if (!data) return 1000;
 
+				// Check session status - poll while not idle
+				const isSessionActive = data.status?.type !== "idle";
+
 				// Check if any tool calls are still running
 				const hasRunningTools = data.toolCalls?.some(
 					(t) => t.state.status === "pending" || t.state.status === "running",
 				);
 
-				// Poll every second while tools are running, otherwise stop
-				return hasRunningTools ? 1000 : false;
+				// Poll every second while session is active or tools are running
+				return isSessionActive || hasRunningTools ? 1000 : false;
 			},
 		},
 	);
@@ -284,31 +287,16 @@ export function TicketAgentTab({
 														/>
 													)}
 
-													{/* Tool calls (for assistant messages) */}
-													{!isUser && toolParts.length > 0 && (
-														<div>
-															<span className="text-muted-foreground text-xs uppercase tracking-wider">
-																Tool Calls
-															</span>
-															<div className="mt-1 space-y-1">
-																{toolParts.map((tool) => (
-																	<OpencodeToolCallDisplay
-																		key={tool.id}
-																		tool={tool}
-																	/>
-																))}
-															</div>
-														</div>
-													)}
-
-													{/* Text content */}
-													{!isUser && toolParts.length > 0 && msg.text && (
-														<div className="h-px bg-border/40" />
-													)}
+													{/* Text content (final output) */}
 													{msg.text && (
 														<div className="prose prose-sm prose-invert prose-p:my-0 max-w-none prose-code:rounded prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
 															<Markdown>{msg.text}</Markdown>
 														</div>
+													)}
+
+													{/* Tool calls collapsible section */}
+													{!isUser && toolParts.length > 0 && (
+														<OpencodeStepsCollapsible toolParts={toolParts} />
 													)}
 												</CardContent>
 											</Card>

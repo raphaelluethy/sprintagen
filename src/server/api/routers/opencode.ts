@@ -1,11 +1,12 @@
 /**
+
  * OpenCode tRPC Router
  *
  * Handles all OpenCode operations including session management,
  * message handling, and real-time updates.
  */
 
-import type { Part, Session } from "@opencode-ai/sdk";
+import type { Session } from "@opencode-ai/sdk";
 import { TRPCError } from "@trpc/server";
 import dedent from "dedent";
 import { eq } from "drizzle-orm";
@@ -251,11 +252,12 @@ export const opencodeRouter = createTRPCRouter({
 				});
 			}
 
+			const allParts = (messagesResult.data ?? []).flatMap((m) => m.parts);
+
 			const messages = (messagesResult.data ?? []).map((m) =>
 				transformMessage(m.info, m.parts),
 			);
 
-			const allParts = (messagesResult.data ?? []).flatMap((m) => m.parts);
 			const toolCalls = getCurrentToolCalls(allParts);
 
 			return {

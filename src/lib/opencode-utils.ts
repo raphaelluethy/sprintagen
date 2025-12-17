@@ -66,9 +66,7 @@ export type ToolState =
  */
 export function getTextContent(parts: Part[]): string {
 	return parts
-		.filter(
-			(p): p is Extract<Part, { type: "text" }> => p.type === "text",
-		)
+		.filter((p): p is Extract<Part, { type: "text" }> => p.type === "text")
 		.map((p) => p.text)
 		.join("")
 		.trim();

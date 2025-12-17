@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
-import dedent from "dedent";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
+import { getOpencodeClient } from "@/lib/opencode-client";
 import {
 	analyzeWithAI,
 	buildChatSystemPrompt,
@@ -30,8 +30,6 @@ import {
 	createNewOpencodeSessionForTicket,
 	getOpencodeMessages,
 	getPersistedSessions,
-	lookupExistingOpencodeSession,
-	type OpencodeChatMessage,
 	persistOpencodeSession,
 	sendOpencodeMessage,
 } from "@/server/tickets/opencode";
@@ -713,19 +711,38 @@ export const ticketRouter = createTRPCRouter({
 				(p): p is import("@opencode-ai/sdk").ToolPart => p.type === "tool",
 			);
 
+			// Get actual session status from SDK
+			// SessionStatus can be: idle, pending, running, retry
+			let sessionStatus: { type: string } = { type: "idle" };
+			if (result.data.currentSessionId) {
+				try {
+					const client = getOpencodeClient();
+					const statusResult = await client.session.status();
+					const sdkStatus = statusResult.data?.[result.data.currentSessionId];
+					if (sdkStatus) {
+						sessionStatus = sdkStatus;
+					}
+				} catch {
+					// Fallback to idle if status fetch fails
+					sessionStatus = { type: "idle" };
+				}
+			}
+
 			// Persist session data for history (don't await - fire and forget)
+			// Only persist when session is idle (completed or error)
 			if (result.data.currentSessionId && result.data.messages.length > 0) {
-				// Check if any tool is still running
+				const isRunning = sessionStatus.type !== "idle";
 				const hasRunningTools = toolParts.some(
 					(t) => t.state.status === "pending" || t.state.status === "running",
 				);
-				const sessionStatus = hasRunningTools ? "running" : "completed";
+				const persistStatus =
+					isRunning || hasRunningTools ? "running" : "completed";
 
 				persistOpencodeSession(
 					result.data.currentSessionId,
 					input.ticketId,
 					"chat",
-					sessionStatus,
+					persistStatus,
 					result.data.messages,
 				).catch((err) => {
 					console.error(
@@ -740,7 +757,7 @@ export const ticketRouter = createTRPCRouter({
 				messages: result.data.messages,
 				currentSessionId: result.data.currentSessionId,
 				isNewSession: result.data.isNewSession,
-				status: "completed" as const, // We don't have granular status without polling/events
+				status: sessionStatus,
 				toolCalls: toolParts,
 			};
 		}),

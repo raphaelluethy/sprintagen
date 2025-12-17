@@ -32,30 +32,30 @@ export default function AdminChatsPage() {
 	return (
 		<div className="flex h-screen flex-col bg-background">
 			<ChatHeader
-				healthStatus={healthStatus}
 				authStatus={authStatus}
 				fastMode={fastMode}
+				healthStatus={healthStatus}
 				modelConfig={modelConfig}
 			/>
 
 			<div className="flex min-h-0 flex-1">
 				<SessionsSidebar
-					sessions={sessions}
-					selectedSessionId={selectedSessionId}
-					onSelectSession={setSelectedSessionId}
-					onCreateSession={createSession}
-					isLoading={isLoading}
 					healthStatus={healthStatus}
+					isLoading={isLoading}
+					onCreateSession={createSession}
+					onSelectSession={setSelectedSessionId}
+					selectedSessionId={selectedSessionId}
+					sessions={sessions}
 				/>
 
 				<ChatArea
+					error={error}
+					hasSelectedSession={!!selectedSessionId}
+					isSending={isSending}
 					messages={messages}
 					newMessage={newMessage}
 					onNewMessageChange={setNewMessage}
 					onSendMessage={sendMessage}
-					isSending={isSending}
-					error={error}
-					hasSelectedSession={!!selectedSessionId}
 				/>
 			</div>
 		</div>

@@ -5,6 +5,50 @@ import type { ToolPart } from "@/server/tickets/opencode";
 
 type ToolState = ToolPart["state"];
 
+// Collapsible container for all tool calls in a message
+export function OpencodeStepsCollapsible({
+	toolParts,
+}: {
+	toolParts: ToolPart[];
+}) {
+	const [isExpanded, setIsExpanded] = useState(false);
+
+	if (toolParts.length === 0) return null;
+
+	return (
+		<div className="mt-3">
+			<button
+				className="flex items-center gap-1.5 text-muted-foreground text-xs transition-colors hover:text-foreground"
+				onClick={() => setIsExpanded(!isExpanded)}
+				type="button"
+			>
+				<svg
+					aria-hidden="true"
+					className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						d="M9 5l7 7-7 7"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth={2}
+					/>
+				</svg>
+				<span>Check steps ({toolParts.length})</span>
+			</button>
+			{isExpanded && (
+				<div className="mt-2 space-y-1">
+					{toolParts.map((tool) => (
+						<OpencodeToolCallDisplay key={tool.id} tool={tool} />
+					))}
+				</div>
+			)}
+		</div>
+	);
+}
+
 // Reasoning display component
 export function OpencodeReasoningDisplay({ reasoning }: { reasoning: string }) {
 	const [showReasoning, setShowReasoning] = useState(false);
@@ -198,7 +242,7 @@ export function OpencodeToolCallDisplay({ tool }: { tool: ToolPart }) {
 
 					{/* Show timing information for completed tools */}
 					{tool.state.status === "completed" && tool.state.time && (
-						<div className="text-muted-foreground text-[10px]">
+						<div className="text-[10px] text-muted-foreground">
 							Duration:{" "}
 							{((tool.state.time.end - tool.state.time.start) / 1000).toFixed(
 								2,

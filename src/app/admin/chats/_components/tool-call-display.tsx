@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import type { ToolPart } from "@opencode-ai/sdk";
+import { useState } from "react";
 import {
-	type ToolState,
-	getToolTitle,
 	getToolOutput,
 	getToolPreview,
+	getToolTitle,
+	type ToolState,
 } from "@/lib/opencode-utils";
 
 interface ToolCallDisplayProps {

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Message, Part } from "@opencode-ai/sdk";
 import { createDebugLogger } from "@/lib/debug-logger";
 import type { MessageWithParts } from "@/lib/opencode-utils";
 import type { Session } from "../_components/sessions-sidebar";

@@ -11,8 +11,8 @@ import { getOpencodeClient } from "@/lib/opencode-client";
 import { db } from "@/server/db";
 import { opencodeSessionsTable, tickets } from "@/server/db/schema";
 import {
-	transformMessage,
 	type TransformedMessage,
+	transformMessage,
 } from "@/server/opencode/message-utils";
 
 export type MessagePart = Part;

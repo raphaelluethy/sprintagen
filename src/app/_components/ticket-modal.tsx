@@ -44,7 +44,6 @@ interface TicketModalProps {
 	getPendingSessionId: (ticketId: string) => string | null;
 }
 
-
 export function TicketModal({
 	ticket,
 	open,
