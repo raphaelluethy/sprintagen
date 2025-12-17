@@ -3,6 +3,10 @@
 	// Use Cerebras as the default provider with zai-glm-4.6 model
 	// "model": "cerebras/zai-glm-4.6",
 	"model": "opencode/big-pickle",
+	// Disable all custom tools from .opencode/tool to avoid dependency issues
+	"tools": {
+		"*": false
+	},
 	// Configure agents - docs-agent is defined in agent/docs-agent.md
 	"agent": {
 		"docs-agent": {
