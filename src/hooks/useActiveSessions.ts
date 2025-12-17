@@ -33,13 +33,7 @@ interface UseActiveSessionsResult {
 }
 
 /**
- * Hook that queries the backend for active OpenCode sessions and provides
- * state management for tracking pending analyses.
- *
- * On page load, this hook:
- * 1. Fetches all pending/running sessions from Redis (or DB fallback)
- * 2. Restores the UI state (pending ticket IDs + session map)
- * 3. Provides helpers to check/add pending sessions
+ * Hook for tracking pending OpenCode sessions in the UI.
  */
 export function useActiveSessions(): UseActiveSessionsResult {
 	// Track tickets with pending Ask Opencode runs
@@ -98,25 +92,20 @@ export function useActiveSessions(): UseActiveSessionsResult {
 		}
 	}, [pendingInquiriesQuery.data]);
 
-	// Check if a specific ticket has a pending Ask Opencode run
 	const isAskOpencodePending = useCallback(
 		(ticketId: string) => pendingAskTicketIds.has(ticketId),
 		[pendingAskTicketIds],
 	);
 
-	// Get the session ID for a pending ticket (for SSE connection)
 	const getPendingSessionId = useCallback(
 		(ticketId: string) => pendingSessionMap.get(ticketId) ?? null,
 		[pendingSessionMap],
 	);
 
-	// Mark a ticket as pending (optimistic update when starting Ask Opencode)
-	// Called immediately when mutation starts, before we have a sessionId
 	const markTicketPending = useCallback((ticketId: string) => {
 		setPendingAskTicketIds((prev) => new Set([...prev, ticketId]));
 	}, []);
 
-	// Set the session ID for a pending ticket (called when mutation succeeds)
 	const setSessionId = useCallback((ticketId: string, sessionId: string) => {
 		setPendingSessionMap((prev) => {
 			const next = new Map(prev);
@@ -125,7 +114,6 @@ export function useActiveSessions(): UseActiveSessionsResult {
 		});
 	}, []);
 
-	// Add a new pending session with sessionId (convenience method)
 	const addPendingSession = useCallback(
 		(ticketId: string, sessionId: string) => {
 			markTicketPending(ticketId);

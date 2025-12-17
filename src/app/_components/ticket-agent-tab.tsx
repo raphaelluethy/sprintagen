@@ -8,11 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import type {
-	MessagePart,
-	ReasoningPart,
-	ToolPart,
-} from "@/server/tickets/opencode";
+import type { ReasoningPart, ToolPart } from "@/server/tickets/opencode";
 import { api } from "@/trpc/react";
 import {
 	OpencodeReasoningDisplay,
