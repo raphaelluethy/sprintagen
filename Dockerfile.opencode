@@ -20,6 +20,9 @@ RUN mkdir -p /root/.config/opencode/agent
 COPY opencode/opencode.jsonc /root/.config/opencode/opencode.jsonc
 COPY opencode/agent/docs-agent.md /root/.config/opencode/agent/docs-agent.md
 
+# For testing purposes
+ENV GIT_REPO_URL="https://github.com/sst/opencode"
+
 # Copy entrypoint script
 COPY entrypoint-opencode.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
