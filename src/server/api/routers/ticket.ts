@@ -1,3 +1,4 @@
+import type { SessionStatus } from "@opencode-ai/sdk";
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -713,7 +714,7 @@ export const ticketRouter = createTRPCRouter({
 
 			// Get actual session status from SDK
 			// SessionStatus can be: idle, pending, running, retry
-			let sessionStatus: { type: string } = { type: "idle" };
+			let sessionStatus: SessionStatus = { type: "idle" };
 			if (result.data.currentSessionId) {
 				try {
 					const client = getOpencodeClient();

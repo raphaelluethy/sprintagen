@@ -57,7 +57,6 @@ export function TicketModal({
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 
-	// URL helper function
 	const updateSearchParams = (updates: Record<string, string | null>) => {
 		const params = new URLSearchParams(searchParams.toString());
 		for (const [key, value] of Object.entries(updates)) {
@@ -70,7 +69,6 @@ export function TicketModal({
 		router.push(`${pathname}?${params.toString()}`, { scroll: false });
 	};
 
-	// Derive active tab from URL with default
 	const tabParam = searchParams.get("tab");
 	const validTabs = ["details", "agent-insight", "chat", "agent-chat"] as const;
 	const activeTab =
@@ -87,32 +85,25 @@ export function TicketModal({
 	>(null);
 	const completionNotifiedRef = useRef(false);
 
-	// Chat context state
 	const [replyingToInsight, setReplyingToInsight] = useState<{
 		insight: string;
 		date: Date;
 	} | null>(null);
 
-	// Get the pending session ID for this ticket (if any)
 	const pendingSessionId = ticket?.id ? getPendingSessionId(ticket.id) : null;
 
-	// Connect to SSE stream for live updates when there's a pending session
 	const sseStream = useOpencodeSSE(
 		pendingSessionId,
 		open && !!pendingSessionId,
 	);
 
-	// Reset session state when ticket changes
 	const ticketId = ticket?.id;
 	useEffect(() => {
-		// Reset session state when ticket changes
-		// Using ticketId to satisfy linter - we need to react to ticket changes
 		void ticketId;
 		setOpencodeChatSessionId(null);
 		completionNotifiedRef.current = false;
 	}, [ticketId]);
 
-	// Fetch full ticket data with messages
 	const ticketQuery = api.ticket.byId.useQuery(
 		{ id: ticket?.id ?? "" },
 		{ enabled: !!ticket?.id && open },
@@ -121,25 +112,24 @@ export function TicketModal({
 	const fullTicket = ticketQuery.data ?? ticket;
 	const messages = fullTicket?.messages ?? [];
 
-	// Opencode status query
 	const opencodeStatusQuery = api.ticket.getOpencodeStatus.useQuery(undefined, {
 		enabled: open,
-		staleTime: 30000, // Cache for 30 seconds
+		staleTime: 30000,
 	});
 
 	const recommendationsMutation =
 		api.ticket.generateRecommendations.useMutation({
 			onSuccess: () => {
-				void ticketQuery.refetch();
+				ticketQuery.refetch().catch((error) => {
+					console.error("[TicketModal] Failed to refetch ticket data:", error);
+				});
 			},
 		});
 
-	// State for tracking live analysis steps during "Ask Opencode"
 	const [liveAnalysisSteps, setLiveAnalysisSteps] = useState<
 		{ tool: string; title: string; status: string; id: string }[]
 	>([]);
 
-	// Determine if this ticket has a pending Ask Opencode run (from parent)
 	const thisTicketAskPending = ticket?.id
 		? isAskOpencodePending(ticket.id)
 		: false;
@@ -179,10 +169,8 @@ export function TicketModal({
 		}
 	}, [sseStream.toolCalls]);
 
-	// Reset live steps when the analysis completes
 	useEffect(() => {
 		if (!askOpencodeInFlight && liveAnalysisSteps.length > 0) {
-			// Clear live steps after a brief delay to show completion
 			const timeout = setTimeout(() => setLiveAnalysisSteps([]), 500);
 			return () => clearTimeout(timeout);
 		}
@@ -302,7 +290,14 @@ export function TicketModal({
 					<TicketChatTab
 						messages={messages}
 						onReplyingToInsightChange={setReplyingToInsight}
-						onTicketRefetch={() => void ticketQuery.refetch()}
+						onTicketRefetch={() => {
+							ticketQuery.refetch().catch((error) => {
+								console.error(
+									"[TicketModal] Failed to refetch ticket data:",
+									error,
+								);
+							});
+						}}
 						replyingToInsight={replyingToInsight}
 						ticketId={ticket.id}
 					/>

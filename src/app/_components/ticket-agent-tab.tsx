@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,7 +18,6 @@ import {
 } from "./opencode-tool-call";
 import type { OpencodeChatMessage } from "./types";
 
-// Types for grouped messages
 type MessageGroup =
 	| { type: "user"; message: OpencodeChatMessage }
 	| { type: "response"; message: OpencodeChatMessage }
@@ -27,7 +27,6 @@ type MessageGroup =
 			toolParts: ToolPart[];
 	  };
 
-// Group messages: consecutive tool-only agent messages get combined
 function groupMessages(messages: OpencodeChatMessage[]): MessageGroup[] {
 	const groups: MessageGroup[] = [];
 	let currentToolGroup: OpencodeChatMessage[] = [];
@@ -50,31 +49,25 @@ function groupMessages(messages: OpencodeChatMessage[]): MessageGroup[] {
 			flushToolGroup();
 			groups.push({ type: "user", message: msg });
 		} else {
-			// Agent message - check if it has text content
 			const toolParts =
 				msg.parts?.filter((p): p is ToolPart => p.type === "tool") ?? [];
 			const hasText = !!msg.text?.trim();
 
 			if (hasText) {
-				// This is a response message - flush any pending tool group first
 				flushToolGroup();
 				groups.push({ type: "response", message: msg });
 			} else if (toolParts.length > 0) {
-				// Tool-only message - add to current group
 				currentToolGroup.push(msg);
 				currentToolParts.push(...toolParts);
 			}
-			// Skip empty messages (no text, no tools)
 		}
 	}
 
-	// Flush any remaining tool group
 	flushToolGroup();
 
 	return groups;
 }
 
-// Grouped tool steps block with distinctive amber styling
 function ToolStepsBlock({
 	toolParts,
 	timestamp,
@@ -96,10 +89,8 @@ function ToolStepsBlock({
 
 	return (
 		<div className="relative pl-8">
-			{/* Timeline dot - amber for tool steps */}
 			<div className="absolute top-2 left-0 h-3.5 w-3.5 rounded-full border-2 border-background bg-amber-500 ring-4 ring-background" />
 
-			{/* Header */}
 			<div className="mb-2 flex items-center gap-2">
 				<time className="font-medium text-muted-foreground text-xs">
 					{timestamp.toLocaleString(undefined, {
@@ -120,14 +111,12 @@ function ToolStepsBlock({
 				)}
 			</div>
 
-			{/* Tool steps card - amber tinted */}
 			<div className="overflow-hidden rounded-lg border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-amber-600/10">
 				<button
 					className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-amber-500/5"
 					onClick={() => setIsExpanded(!isExpanded)}
 					type="button"
 				>
-					{/* Expand/collapse indicator */}
 					<svg
 						aria-hidden="true"
 						className={`h-3.5 w-3.5 text-amber-600 transition-transform dark:text-amber-400 ${isExpanded ? "rotate-90" : ""}`}
@@ -143,7 +132,6 @@ function ToolStepsBlock({
 						/>
 					</svg>
 
-					{/* Tool icon */}
 					<div className="flex h-7 w-7 items-center justify-center rounded-md bg-amber-500/15">
 						<svg
 							aria-hidden="true"
@@ -161,7 +149,6 @@ function ToolStepsBlock({
 						</svg>
 					</div>
 
-					{/* Summary text */}
 					<div className="flex-1">
 						<span className="font-medium text-foreground text-sm">
 							{toolParts.length} step{toolParts.length !== 1 ? "s" : ""}
@@ -208,7 +195,6 @@ function ToolStepsBlock({
 					)}
 				</button>
 
-				{/* Expanded tool list */}
 				{isExpanded && (
 					<div className="border-amber-500/10 border-t bg-background/50 p-2">
 						<div className="space-y-1">
@@ -223,7 +209,6 @@ function ToolStepsBlock({
 	);
 }
 
-// Individual tool step item within the grouped block
 function ToolStepItem({ tool }: { tool: ToolPart }) {
 	const [isExpanded, setIsExpanded] = useState(false);
 
@@ -356,6 +341,7 @@ export function TicketAgentTab({
 	>([]);
 	const [sessionRequested, setSessionRequested] = useState(false);
 	const opencodeChatEndRef = useRef<HTMLDivElement>(null);
+	const lastMessageIdRef = useRef<string | null>(null);
 
 	const opencodeStatusQuery = api.ticket.getOpencodeStatus.useQuery(undefined, {
 		enabled: open,
@@ -368,7 +354,6 @@ export function TicketAgentTab({
 		},
 	});
 
-	// Start a new session when Agent chat tab is first accessed
 	useEffect(() => {
 		if (
 			activeTab === "agent-chat" &&
@@ -389,13 +374,11 @@ export function TicketAgentTab({
 		startSessionMutation,
 	]);
 
-	// SSE connection for real-time updates
 	const sseConnection = useOpencodeSSE(
 		opencodeChatSessionId,
 		open && activeTab === "agent-chat" && !!opencodeChatSessionId,
 	);
 
-	// Initial data fetch (no polling)
 	const opencodeChatQuery = api.ticket.getOpencodeChat.useQuery(
 		{
 			ticketId,
@@ -410,10 +393,8 @@ export function TicketAgentTab({
 		},
 	);
 
-	// Merge initial query data with SSE updates
 	const opencodeData = opencodeChatQuery.data;
 
-	// Transform SSE messages to the expected format
 	const sseMessages = useMemo((): OpencodeChatMessage[] => {
 		return sseConnection.messages.map((m) => {
 			const textParts = m.parts
@@ -444,7 +425,6 @@ export function TicketAgentTab({
 		});
 	}, [sseConnection.messages]);
 
-	// Use SSE messages if available, otherwise fall back to query data
 	const opencodeMessages = useMemo(() => {
 		const baseMessages =
 			sseMessages.length > 0 ? sseMessages : (opencodeData?.messages ?? []);
@@ -464,19 +444,25 @@ export function TicketAgentTab({
 		},
 		onSuccess: () => {
 			setOptimisticOpencodeMessages([]);
-			void opencodeChatQuery.refetch();
+			opencodeChatQuery.refetch().catch((error) => {
+				console.error(
+					"[TicketAgentTab] Failed to refetch chat messages:",
+					error,
+				);
+			});
 		},
 		onError: () => {
 			setOptimisticOpencodeMessages([]);
 		},
 	});
 
-	// Scroll to bottom when opencode messages change
 	useEffect(() => {
-		if (opencodeMessages.length > 0) {
+		const lastMessage = opencodeMessages[opencodeMessages.length - 1];
+		if (lastMessage && lastMessage.id !== lastMessageIdRef.current) {
+			lastMessageIdRef.current = lastMessage.id;
 			opencodeChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
 		}
-	}, [opencodeMessages.length]);
+	}, [opencodeMessages]);
 
 	const handleSendOpencodeMessage = () => {
 		if (!opencodeChatInput.trim() || !ticketId || !opencodeChatSessionId)
@@ -521,14 +507,12 @@ export function TicketAgentTab({
 			value="agent-chat"
 		>
 			<div className="flex min-h-0 flex-1 flex-col pt-0 pr-6 pb-2 pl-6">
-				{/* Connection status indicator */}
 				{sseConnection.connectionState === "error" && (
 					<div className="mb-2 rounded-md bg-destructive/10 px-3 py-2 text-destructive text-sm">
 						Connection lost. Retrying...
 					</div>
 				)}
 
-				{/* Opencode chat messages */}
 				<ScrollArea className="min-h-0 flex-1">
 					<div className="space-y-4 pr-4">
 						{startSessionMutation.isPending || opencodeChatQuery.isLoading ? (
@@ -574,10 +558,8 @@ export function TicketAgentTab({
 										const msg = group.message;
 										return (
 											<div className="relative pl-8" key={msg.id}>
-												{/* Timeline dot - user */}
 												<div className="absolute top-2 left-0 h-3.5 w-3.5 rounded-full border-2 border-background bg-foreground ring-4 ring-background" />
 
-												{/* Date header */}
 												<div className="mb-2 flex items-center gap-2">
 													<time className="font-medium text-muted-foreground text-xs">
 														{new Date(msg.createdAt).toLocaleString(undefined, {
@@ -590,12 +572,13 @@ export function TicketAgentTab({
 													</span>
 												</div>
 
-												{/* User message card */}
 												<Card className="border-border/40 bg-card/50 py-1">
 													<CardContent className="px-3 py-1">
 														{msg.text && (
 															<div className="prose prose-sm prose-invert prose-p:my-0 max-w-none prose-code:rounded prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
-																<Markdown>{msg.text}</Markdown>
+																<Markdown rehypePlugins={[rehypeSanitize]}>
+																	{msg.text}
+																</Markdown>
 															</div>
 														)}
 													</CardContent>
@@ -638,10 +621,8 @@ export function TicketAgentTab({
 
 										return (
 											<div className="relative pl-8" key={msg.id}>
-												{/* Timeline dot - response (larger, prominent) */}
 												<div className="absolute top-2 left-0 h-3.5 w-3.5 rounded-full border-2 border-background bg-emerald-500 ring-4 ring-background" />
 
-												{/* Date header */}
 												<div className="mb-2 flex items-center gap-2">
 													<time className="font-medium text-muted-foreground text-xs">
 														{new Date(msg.createdAt).toLocaleString(undefined, {
@@ -662,7 +643,6 @@ export function TicketAgentTab({
 													)}
 												</div>
 
-												{/* Response card - prominent styling */}
 												<Card className="border-emerald-500/20 bg-gradient-to-br from-card to-emerald-500/5 py-1 shadow-sm">
 													<CardContent className="space-y-1 px-3 py-1">
 														{hasReasoning && (
@@ -673,7 +653,9 @@ export function TicketAgentTab({
 
 														{msg.text && (
 															<div className="prose prose-sm prose-invert prose-p:my-0 max-w-none prose-code:rounded prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
-																<Markdown>{msg.text}</Markdown>
+																<Markdown rehypePlugins={[rehypeSanitize]}>
+																	{msg.text}
+																</Markdown>
 															</div>
 														)}
 
@@ -705,7 +687,6 @@ export function TicketAgentTab({
 					</div>
 				</ScrollArea>
 
-				{/* Opencode chat input */}
 				<div className="mt-4 space-y-2">
 					{replyingToInsight && (
 						<div className="flex items-center justify-between rounded-md border border-primary/20 bg-primary/10 px-3 py-2">

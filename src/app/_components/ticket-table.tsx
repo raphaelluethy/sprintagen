@@ -82,8 +82,15 @@ export function TicketTable({
 
 	const rankMutation = api.ticket.rankTickets.useMutation({
 		onSuccess: () => {
-			void ticketsQuery.refetch();
-			void aiRankedQuery.refetch();
+			ticketsQuery.refetch().catch((error) => {
+				console.error("[TicketTable] Failed to refetch tickets:", error);
+			});
+			aiRankedQuery.refetch().catch((error) => {
+				console.error(
+					"[TicketTable] Failed to refetch AI ranked tickets:",
+					error,
+				);
+			});
 		},
 	});
 
