@@ -104,7 +104,8 @@ Optional:
 
 - **No test framework** is currently configured
 - **Dev auth bypass:** In development, `protectedProcedure` uses a mock user when unauthenticated
-- **Polling-based sync:** Ticket sync uses polling (Redis/SSE removed in recent refactor)
+- **Polling-based sync:** Ticket sync uses polling
+- **Opencode SSE:** The Opencode chat feature uses Server-Sent Events (SSE) for real-time updates via `useOpencodeSSE` hook and `/api/opencode/events` endpoint
 - Path alias: `@/*` maps to `./src/*`
 
 ## btca

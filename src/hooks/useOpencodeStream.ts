@@ -22,6 +22,9 @@ interface UseOpencodeStreamResult {
 }
 
 /**
+ * @deprecated Use useOpencodeSSE instead for real-time updates.
+ * This polling-based hook is kept for backward compatibility only.
+ *
  * Hook to poll for OpenCode session updates
  * Replaces the previous SSE implementation with TRPC polling
  */

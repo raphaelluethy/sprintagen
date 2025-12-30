@@ -8,7 +8,7 @@
         "@ai-sdk/cerebras": "^1.0.31",
         "@auth/drizzle-adapter": "^1.7.2",
         "@libsql/client": "^0.15.15",
-        "@opencode-ai/sdk": "^1.0.164",
+        "@opencode-ai/sdk": "^1.0.215",
         "@openrouter/ai-sdk-provider": "^1.2.7",
         "@radix-ui/react-dialog": "^1.1.15",
         "@radix-ui/react-scroll-area": "^1.2.10",
@@ -280,7 +280,7 @@
 
     "@noble/hashes": ["@noble/hashes@2.0.1", "", {}, "sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw=="],
 
-    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.0.164", "", {}, "sha512-TG+bpgL3O4tU/vCOT0THaSL5wJoXc15ErS79NLrEzFj1Igq1a9Mhef3oYZae0zZOI/ZTl/VNswguUeqkBm41pg=="],
+    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.0.218", "", {}, "sha512-c6ss6UPAMskSVQUecuhNvPLFngyVh2Os9o0kpVjoqJJ16HXhzjVSk5axgh3ueQrfP5aZfg5o6l6srmjuCTPNnQ=="],
 
     "@openrouter/ai-sdk-provider": ["@openrouter/ai-sdk-provider@1.2.7", "", { "dependencies": { "@openrouter/sdk": "^0.1.8" }, "peerDependencies": { "ai": "^5.0.0", "zod": "^3.24.1 || ^v4" } }, "sha512-Ra9/93QJ7nKheFlB9ZbiTgpDYeEUA7AuOLqjUIzidKVcVWm4wbHmOOBU5y4rIUgQ1wQNfwRsBPDtGyVMTPeyBg=="],
 

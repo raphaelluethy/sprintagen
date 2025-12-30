@@ -10,7 +10,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useOpencodeStream } from "@/hooks/useOpencodeStream";
+import { useOpencodeSSE } from "@/hooks/useOpencodeSSE";
 import type {
 	ticketMessages,
 	ticketRankings,
@@ -97,7 +97,10 @@ export function TicketModal({
 	const pendingSessionId = ticket?.id ? getPendingSessionId(ticket.id) : null;
 
 	// Connect to SSE stream for live updates when there's a pending session
-	const sseStream = useOpencodeStream(open ? pendingSessionId : null);
+	const sseStream = useOpencodeSSE(
+		pendingSessionId,
+		open && !!pendingSessionId,
+	);
 
 	// Reset session state when ticket changes
 	const ticketId = ticket?.id;

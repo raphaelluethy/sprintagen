@@ -7,10 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TabsContent } from "@/components/ui/tabs";
-import type {
-	ReasoningPart,
-	ToolPart,
-} from "@/server/tickets/opencode";
+import type { ReasoningPart, ToolPart } from "@/server/tickets/opencode";
 import { api } from "@/trpc/react";
 import {
 	OpencodeReasoningDisplay,
