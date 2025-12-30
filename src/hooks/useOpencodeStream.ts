@@ -2,9 +2,6 @@ import type { Message, Part, SessionStatus, ToolPart } from "@opencode-ai/sdk";
 import { useMemo } from "react";
 import { api } from "@/trpc/react";
 
-/**
- * Message with parts combined
- */
 interface MessageWithParts {
 	info: Message;
 	parts: Part[];
@@ -13,21 +10,12 @@ interface MessageWithParts {
 interface UseOpencodeStreamResult {
 	messages: MessageWithParts[];
 	toolCalls: ToolPart[];
-	/** Legacy status string for backward compatibility */
 	status: "pending" | "running" | "completed" | "error";
-	/** SDK SessionStatus object */
 	sessionStatus: SessionStatus;
 	error: string | null;
 	isConnected: boolean;
 }
 
-/**
- * @deprecated Use useOpencodeSSE instead for real-time updates.
- * This polling-based hook is kept for backward compatibility only.
- *
- * Hook to poll for OpenCode session updates
- * Replaces the previous SSE implementation with TRPC polling
- */
 export function useOpencodeStream(
 	sessionId: string | null,
 ): UseOpencodeStreamResult {
@@ -37,10 +25,9 @@ export function useOpencodeStream(
 			enabled: !!sessionId,
 			refetchInterval: (query) => {
 				const data = query.state.data;
-				// Stop polling if session is idle (completed) or error
 				if (!data) return 1000;
 				if (data.status.type === "idle") return false;
-				return 1000; // Poll every 1s while running
+				return 1000;
 			},
 			retry: false,
 		},
@@ -48,9 +35,6 @@ export function useOpencodeStream(
 
 	const messages = useMemo(() => {
 		if (!query.data?.messages) return [];
-		// Map flattened messages back to MessageWithParts structure if needed
-		// The router returns transformed messages which are flattened
-		// We'll reconstruct the info/parts structure to maintain compatibility
 		return query.data.messages.map((msg) => ({
 			info: {
 				id: msg.id,
@@ -104,16 +88,10 @@ export function useOpencodeStream(
 	};
 }
 
-/**
- * Hook to get transformed messages for display
- * Converts SDK format to the legacy OpencodeChatMessage format for backward compatibility
- * @deprecated Use useOpencodeStream directly or the TRPC query
- */
 export function useOpencodeMessages(sessionId: string | null) {
 	const { messages, toolCalls, status, sessionStatus, error, isConnected } =
 		useOpencodeStream(sessionId);
 
-	// Transform to legacy format - memoized to prevent unnecessary re-renders
 	const transformedMessages = useMemo(
 		() =>
 			messages.map((m) => {

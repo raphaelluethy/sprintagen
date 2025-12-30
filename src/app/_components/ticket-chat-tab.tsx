@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TabsContent } from "@/components/ui/tabs";
@@ -30,6 +31,7 @@ export function TicketChatTab({
 }: TicketChatTabProps) {
 	const [chatInput, setChatInput] = useState("");
 	const chatEndRef = useRef<HTMLDivElement>(null);
+	const lastMessageIdRef = useRef<string | null>(null);
 
 	const chatMutation = api.ticket.chat.useMutation({
 		onSuccess: () => {
@@ -44,12 +46,13 @@ export function TicketChatTab({
 		},
 	});
 
-	// Scroll to bottom when messages change
 	useEffect(() => {
-		if (messages.length > 0) {
+		const lastMessage = messages[messages.length - 1];
+		if (lastMessage && lastMessage.id !== lastMessageIdRef.current) {
+			lastMessageIdRef.current = lastMessage.id;
 			chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
 		}
-	}, [messages.length]);
+	}, [messages]);
 
 	const handleSendMessage = () => {
 		if (!chatInput.trim() || !ticketId) return;
@@ -96,7 +99,9 @@ export function TicketChatTab({
 										}`}
 									>
 										<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
-											<Markdown>{msg.content}</Markdown>
+											<Markdown rehypePlugins={[rehypeSanitize]}>
+												{msg.content}
+											</Markdown>
 										</div>
 										<p className="mt-1 text-xs tabular-nums opacity-50">
 											{new Date(msg.createdAt).toLocaleTimeString()}

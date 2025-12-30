@@ -138,7 +138,7 @@ export const protectedProcedure = t.procedure
 	.use(timingMiddleware)
 	.use(({ ctx, next }) => {
 		// Development mode bypass - use mock user
-		if (t._config.isDev && !ctx.session?.user) {
+		if (process.env.NODE_ENV === "development" && !ctx.session?.user) {
 			return next({
 				ctx: {
 					session: {

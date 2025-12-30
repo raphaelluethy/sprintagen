@@ -26,15 +26,10 @@ interface UseOpencodeSSEResult {
 	connectionState: ConnectionState;
 }
 
-/**
- * Hook for real-time OpenCode session updates via SSE.
- * Replaces useOpencodeStream polling hook.
- */
 export function useOpencodeSSE(
 	sessionId: string | null,
 	enabled = true,
 ): UseOpencodeSSEResult {
-	// State for messages and parts
 	const [messagesMap, setMessagesMap] = useState<Map<string, Message>>(
 		new Map(),
 	);
@@ -43,27 +38,25 @@ export function useOpencodeSSE(
 		type: "idle",
 	});
 
-	// Connection state
 	const [connectionState, setConnectionState] =
 		useState<ConnectionState>("disconnected");
 	const [error, setError] = useState<string | null>(null);
 
-	// EventSource ref
 	const eventSourceRef = useRef<EventSource | null>(null);
 	const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
 		null,
 	);
 	const reconnectAttemptsRef = useRef(0);
 
-	// Use ref to store sessionId for logging without causing re-renders
+	const SSE_RECONNECT_BASE_MS = 1000;
+	const SSE_RECONNECT_MAX_MS = 30000;
+	const SSE_MAX_RECONNECT_ATTEMPTS = 5;
+
 	const sessionIdRef = useRef(sessionId);
 	sessionIdRef.current = sessionId;
 
 	const cleanup = useCallback(() => {
 		if (eventSourceRef.current) {
-			console.log(
-				`[useOpencodeSSE] Closing EventSource for session ${sessionIdRef.current}`,
-			);
 			eventSourceRef.current.close();
 			eventSourceRef.current = null;
 		}
@@ -93,12 +86,10 @@ export function useOpencodeSSE(
 					const idx = existing.findIndex((p) => p.id === part.id);
 
 					if (idx >= 0) {
-						// Update existing part
 						const updated = [...existing];
 						updated[idx] = part;
 						next.set(part.messageID, updated);
 					} else {
-						// Add new part
 						next.set(part.messageID, [...existing, part]);
 					}
 					return next;
@@ -127,16 +118,13 @@ export function useOpencodeSSE(
 			}
 
 			default:
-				// Ignore other event types
 				break;
 		}
 	}, []);
 
-	// Store enabled in ref to avoid dependency issues
 	const enabledRef = useRef(enabled);
 	enabledRef.current = enabled;
 
-	// Store handleEvent in ref to avoid recreating connect
 	const handleEventRef = useRef(handleEvent);
 	handleEventRef.current = handleEvent;
 
@@ -146,17 +134,14 @@ export function useOpencodeSSE(
 
 		cleanup();
 
+		const url = `/api/opencode/events?sessionId=${encodeURIComponent(currentSessionId)}`;
 		setConnectionState("connecting");
 		setError(null);
-
-		const url = `/api/opencode/events?sessionId=${encodeURIComponent(currentSessionId)}`;
-		console.log(`[useOpencodeSSE] Connecting to ${url}`);
 
 		const eventSource = new EventSource(url);
 		eventSourceRef.current = eventSource;
 
 		eventSource.onopen = () => {
-			console.log(`[useOpencodeSSE] Connected to session ${currentSessionId}`);
 			setConnectionState("connected");
 			setError(null);
 			reconnectAttemptsRef.current = 0;
@@ -170,17 +155,14 @@ export function useOpencodeSSE(
 					| { type: "error"; error: string };
 
 				if (event.type === "connected") {
-					console.log("[useOpencodeSSE] Received connection confirmation");
 					return;
 				}
 
 				if (event.type === "error") {
-					console.error("[useOpencodeSSE] Server error:", event.error);
 					setError(event.error);
 					return;
 				}
 
-				// Handle OpenCode events
 				handleEventRef.current(event as Event);
 			} catch (err) {
 				console.error("[useOpencodeSSE] Failed to parse event:", err);
@@ -188,22 +170,16 @@ export function useOpencodeSSE(
 		};
 
 		eventSource.onerror = () => {
-			console.error(
-				`[useOpencodeSSE] EventSource error for session ${currentSessionId}`,
-			);
 			setConnectionState("error");
 			setError("Connection lost");
 
-			// Close the failed connection
 			eventSource.close();
 			eventSourceRef.current = null;
 
-			// Exponential backoff reconnection
-			const maxAttempts = 5;
-			if (reconnectAttemptsRef.current < maxAttempts) {
-				const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 30000);
-				console.log(
-					`[useOpencodeSSE] Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${maxAttempts})`,
+			if (reconnectAttemptsRef.current < SSE_MAX_RECONNECT_ATTEMPTS) {
+				const delay = Math.min(
+					SSE_RECONNECT_BASE_MS * 2 ** reconnectAttemptsRef.current,
+					SSE_RECONNECT_MAX_MS,
 				);
 
 				reconnectTimeoutRef.current = setTimeout(() => {
@@ -211,22 +187,22 @@ export function useOpencodeSSE(
 					connect();
 				}, delay);
 			} else {
-				console.error("[useOpencodeSSE] Max reconnection attempts reached");
 				setConnectionState("error");
 			}
 		};
 	}, [cleanup]);
 
-	// Connect when sessionId changes or enabled changes
 	useEffect(() => {
 		if (sessionId && enabled) {
-			// Reset state when sessionId changes
 			setMessagesMap(new Map());
 			setPartsMap(new Map());
 			setSessionStatus({ type: "idle" });
 			setError(null);
 			reconnectAttemptsRef.current = 0;
-			connect();
+
+			queueMicrotask(() => {
+				connect();
+			});
 		} else {
 			cleanup();
 			setConnectionState("disconnected");
@@ -235,10 +211,8 @@ export function useOpencodeSSE(
 		return () => {
 			cleanup();
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [sessionId, enabled]);
+	}, [sessionId, enabled, connect, cleanup]);
 
-	// Derive messages with parts
 	const messages: MessageWithParts[] = Array.from(messagesMap.values())
 		.sort((a, b) => {
 			const aTime = (a.time as { created?: number })?.created ?? 0;
@@ -250,12 +224,10 @@ export function useOpencodeSSE(
 			parts: partsMap.get(info.id) ?? [],
 		}));
 
-	// Extract tool calls from all parts
 	const toolCalls: ToolPart[] = messages.flatMap((m) =>
 		m.parts.filter((p): p is ToolPart => p.type === "tool"),
 	);
 
-	// Derive legacy status
 	const status: "pending" | "running" | "completed" | "error" = (() => {
 		if (error) return "error";
 		if (connectionState === "connecting") return "pending";

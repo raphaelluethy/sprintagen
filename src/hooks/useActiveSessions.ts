@@ -1,6 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/trpc/react";
 
+function setsAreEqual<T>(a: Set<T>, b: Set<T>): boolean {
+	if (a.size !== b.size) return false;
+	for (const item of a) {
+		if (!b.has(item)) return false;
+	}
+	return true;
+}
+
+function mapsAreEqual<K, V>(a: Map<K, V>, b: Map<K, V>): boolean {
+	if (a.size !== b.size) return false;
+	for (const [key, value] of a) {
+		if (b.get(key) !== value) return false;
+	}
+	return true;
+}
+
 interface PendingInquiry {
 	ticketId: string;
 	sessionId: string;
@@ -36,58 +52,40 @@ interface UseActiveSessionsResult {
  * Hook for tracking pending OpenCode sessions in the UI.
  */
 export function useActiveSessions(): UseActiveSessionsResult {
-	// Track tickets with pending Ask Opencode runs
 	const [pendingAskTicketIds, setPendingAskTicketIds] = useState<Set<string>>(
 		new Set(),
 	);
 
-	// Map of ticketId -> sessionId for pending inquiries (for SSE connection)
 	const [pendingSessionMap, setPendingSessionMap] = useState<
 		Map<string, string>
 	>(new Map());
 
-	// Query for pending opencode inquiries (restores state on page load)
 	const pendingInquiriesQuery = api.ticket.getPendingOpencodeInquiries.useQuery(
 		undefined,
 		{
-			// Refetch periodically to catch completed sessions
 			refetchInterval: 5000,
-			// Don't refetch on window focus to avoid UI flicker
 			refetchOnWindowFocus: false,
 		},
 	);
 
-	// Populate pending tickets state from server data
 	useEffect(() => {
 		if (pendingInquiriesQuery.data) {
 			const data = pendingInquiriesQuery.data as unknown as PendingInquiry[];
 			const newPendingIds = new Set(data.map((p) => p.ticketId));
 			const newSessionMap = new Map(data.map((p) => [p.ticketId, p.sessionId]));
 
-			// Only update if changed to prevent unnecessary re-renders
 			setPendingAskTicketIds((prev) => {
-				const prevArray = Array.from(prev).sort();
-				const newArray = Array.from(newPendingIds).sort();
-				if (JSON.stringify(prevArray) !== JSON.stringify(newArray)) {
-					return newPendingIds;
+				if (setsAreEqual(prev, newPendingIds)) {
+					return prev;
 				}
-				return prev;
+				return newPendingIds;
 			});
 
 			setPendingSessionMap((prev) => {
-				// Compare maps by converting to sorted arrays
-				const prevEntries = JSON.stringify(
-					Array.from(prev.entries()).sort(([a], [b]) => a.localeCompare(b)),
-				);
-				const newEntries = JSON.stringify(
-					Array.from(newSessionMap.entries()).sort(([a], [b]) =>
-						a.localeCompare(b),
-					),
-				);
-				if (prevEntries !== newEntries) {
-					return newSessionMap;
+				if (mapsAreEqual(prev, newSessionMap)) {
+					return prev;
 				}
-				return prev;
+				return newSessionMap;
 			});
 		}
 	}, [pendingInquiriesQuery.data]);
@@ -137,7 +135,6 @@ export function useActiveSessions(): UseActiveSessionsResult {
 		});
 	}, []);
 
-	// Refetch pending sessions
 	const refetch = useCallback(async () => {
 		await pendingInquiriesQuery.refetch();
 	}, [pendingInquiriesQuery]);

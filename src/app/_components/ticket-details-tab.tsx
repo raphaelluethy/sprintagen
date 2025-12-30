@@ -1,6 +1,7 @@
 "use client";
 
 import Markdown from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { TabsContent } from "@/components/ui/tabs";
@@ -98,7 +99,7 @@ export function TicketDetailsTab({
 						Description
 					</span>
 					<div className="prose prose-sm prose-invert mt-3 max-w-none prose-code:rounded prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
-						<Markdown>
+						<Markdown rehypePlugins={[rehypeSanitize]}>
 							{ticket.description || "No description provided."}
 						</Markdown>
 					</div>

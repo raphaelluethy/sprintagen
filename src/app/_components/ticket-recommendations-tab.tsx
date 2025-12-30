@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import Markdown from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,7 +16,6 @@ import {
 } from "./opencode-tool-call";
 import type { OpencodeChatMessage } from "./types";
 
-// Live analysis progress component for Ask Opencode
 function LiveAnalysisProgress({
 	steps,
 }: {
@@ -241,7 +241,6 @@ function RecommendationsList({
 		);
 	}
 
-	// Items are already sorted newest first from API (descending order)
 	const sortedItems = allItems;
 
 	return (
@@ -318,7 +317,9 @@ function RecommendationsList({
 											Recommended Steps
 										</span>
 										<div className="prose prose-sm prose-invert mt-2 max-w-none prose-code:rounded prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
-											<Markdown>{item.recommendedSteps}</Markdown>
+											<Markdown rehypePlugins={[rehypeSanitize]}>
+												{item.recommendedSteps}
+											</Markdown>
 										</div>
 									</div>
 								)}
@@ -340,7 +341,9 @@ function RecommendationsList({
 												Agent Analysis
 											</span>
 											<div className="prose prose-sm prose-invert mt-2 max-w-none prose-code:rounded prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-code:before:content-none prose-code:after:content-none">
-												<Markdown>{item.opencodeSummary}</Markdown>
+												<Markdown rehypePlugins={[rehypeSanitize]}>
+													{item.opencodeSummary}
+												</Markdown>
 											</div>
 										</div>
 									</>
@@ -551,7 +554,11 @@ export function TicketRecommendationsTab({
 
 																	{msg.text && (
 																		<div className="prose prose-sm prose-invert prose-ol:my-1 prose-p:my-1 prose-pre:my-1 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:bg-background/10 prose-code:px-1 prose-code:py-0.5 text-inherit prose-code:before:content-none prose-code:after:content-none">
-																			<Markdown>{msg.text}</Markdown>
+																			<Markdown
+																				rehypePlugins={[rehypeSanitize]}
+																			>
+																				{msg.text}
+																			</Markdown>
 																		</div>
 																	)}
 

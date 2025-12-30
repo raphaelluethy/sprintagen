@@ -29,7 +29,6 @@ function DashboardContent() {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 
-	// URL helper function
 	const updateSearchParams = (updates: Record<string, string | null>) => {
 		const params = new URLSearchParams(searchParams.toString());
 		for (const [key, value] of Object.entries(updates)) {
@@ -42,10 +41,8 @@ function DashboardContent() {
 		router.push(`${pathname}?${params.toString()}`, { scroll: false });
 	};
 
-	// Derive ticketId from URL
 	const ticketIdParam = searchParams.get("ticketId");
 
-	// Derive view/sort/filter state from URL with defaults
 	const viewMode =
 		(searchParams.get("view") as "standard" | "ai-ranked") || "standard";
 	const sortBy =
@@ -54,7 +51,6 @@ function DashboardContent() {
 	const sortOrder = (searchParams.get("sortOrder") as "asc" | "desc") || "desc";
 	const statusFilter = searchParams.get("status") || "all";
 
-	// Validate and sanitize URL params
 	const validViewMode = viewMode === "ai-ranked" ? "ai-ranked" : "standard";
 	const validSortBy = ["createdAt", "priority", "aiScore"].includes(sortBy)
 		? sortBy
@@ -71,14 +67,10 @@ function DashboardContent() {
 		? statusFilter
 		: "all";
 
-	// Local state for selected ticket (for instant UI updates)
 	const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
 
-	// Track the ticket ID currently being processed by the askOpencode mutation
-	// This provides immediate UI feedback before the hook state updates
 	const [mutatingTicketId, setMutatingTicketId] = useState<string | null>(null);
 
-	// Active sessions hook - restores pending sessions on page load
 	const {
 		pendingAskTicketIds,
 		isAskOpencodePending: isAskOpencodePendingFromHook,
@@ -89,14 +81,12 @@ function DashboardContent() {
 		refetch: refetchPendingSessions,
 	} = useActiveSessions();
 
-	// Combined check: either the hook says it's pending OR we're currently mutating
 	const isAskOpencodePending = useCallback(
 		(ticketId: string) =>
 			isAskOpencodePendingFromHook(ticketId) || mutatingTicketId === ticketId,
 		[isAskOpencodePendingFromHook, mutatingTicketId],
 	);
 
-	// Combined set for the table: includes both hook state and current mutation
 	const combinedPendingAskTicketIds = useMemo(() => {
 		if (!mutatingTicketId) return pendingAskTicketIds;
 		const combined = new Set(pendingAskTicketIds);
@@ -104,19 +94,15 @@ function DashboardContent() {
 		return combined;
 	}, [pendingAskTicketIds, mutatingTicketId]);
 
-	// Derive modal open state from URL
 	const isModalOpen = !!ticketIdParam;
 
-	// Query for deep-linking: fetch ticket by ID when ticketIdParam is present
 	const deepLinkedTicketQuery = api.ticket.byId.useQuery(
 		{ id: ticketIdParam ?? "" },
 		{ enabled: !!ticketIdParam && !selectedTicket },
 	);
 
-	// Use deep-linked ticket if no locally selected ticket
 	const modalTicket = selectedTicket ?? deepLinkedTicketQuery.data ?? null;
 
-	// Sync selectedTicket when URL changes externally (e.g., browser back/forward)
 	useEffect(() => {
 		if (!ticketIdParam) {
 			setSelectedTicket(null);
@@ -125,28 +111,22 @@ function DashboardContent() {
 
 	const utils = api.useUtils();
 
-	// Queries for status indicators
 	const providerStatus = api.ticket.getProviderStatus.useQuery();
 	const aiStatus = api.ticket.getAIStatus.useQuery();
 	const ticketsQuery = api.ticket.list.useQuery();
 
-	// Mutations
 	const syncMutation = api.ticket.syncAll.useMutation({
 		onSuccess: () => {
 			void utils.ticket.list.invalidate();
 		},
 	});
 
-	// Ask Opencode mutation - lifted to Dashboard level so it persists when modal closes
 	const askOpencodeMutation = api.ticket.askOpencode.useMutation({
 		onMutate: (variables) => {
-			// Immediately show loading state via local state (instant feedback)
 			setMutatingTicketId(variables.ticketId);
-			// Also mark in the hook for persistence
 			markTicketPending(variables.ticketId);
 		},
 		onSuccess: (data, variables) => {
-			// Store the sessionId for SSE connection when available
 			if (data?.sessionId) {
 				setSessionId(variables.ticketId, data.sessionId);
 				toast.success("Opencode session created", {
@@ -155,25 +135,19 @@ function DashboardContent() {
 			}
 		},
 		onSettled: (_data, _error, variables) => {
-			// Clear the local mutating state (the hook state persists)
 			setMutatingTicketId(null);
-			// Invalidate ticket data to refresh recommendations
 			void utils.ticket.byId.invalidate({ id: variables.ticketId });
 			void utils.ticket.list.invalidate();
-			// Invalidate recommendations so the new one shows up
 			void utils.ticket.getRecommendations.invalidate({
 				ticketId: variables.ticketId,
 			});
-			// Also invalidate session history
 			void utils.ticket.getSessionHistory.invalidate({
 				ticketId: variables.ticketId,
 			});
-			// Also refetch pending inquiries to get updated state
 			void refetchPendingSessions();
 		},
 	});
 
-	// Handler for Ask Opencode - callable from TicketModal
 	const handleAskOpencode = useCallback(
 		(ticketId: string) => {
 			askOpencodeMutation.mutate({ ticketId });
@@ -191,7 +165,6 @@ function DashboardContent() {
 		updateSearchParams({ ticketId: null });
 	};
 
-	// Handlers for view/sort/filter changes
 	const handleViewModeChange = (view: "standard" | "ai-ranked") => {
 		updateSearchParams({ view });
 	};
@@ -208,7 +181,6 @@ function DashboardContent() {
 		updateSearchParams({ status: status === "all" ? null : status });
 	};
 
-	// Count tickets by status
 	const ticketCounts = ticketsQuery.data?.reduce<{
 		total: number;
 		[key: string]: number;
