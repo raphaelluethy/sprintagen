@@ -5,7 +5,7 @@ import type {
 	SessionStatus,
 	ToolPart,
 } from "@opencode-ai/sdk";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface MessageWithParts {
 	info: Message;
@@ -213,19 +213,27 @@ export function useOpencodeSSE(
 		};
 	}, [sessionId, enabled, connect, cleanup]);
 
-	const messages: MessageWithParts[] = Array.from(messagesMap.values())
-		.sort((a, b) => {
-			const aTime = (a.time as { created?: number })?.created ?? 0;
-			const bTime = (b.time as { created?: number })?.created ?? 0;
-			return aTime - bTime;
-		})
-		.map((info) => ({
-			info,
-			parts: partsMap.get(info.id) ?? [],
-		}));
+	const messages: MessageWithParts[] = useMemo(
+		() =>
+			Array.from(messagesMap.values())
+				.sort((a, b) => {
+					const aTime = (a.time as { created?: number })?.created ?? 0;
+					const bTime = (b.time as { created?: number })?.created ?? 0;
+					return aTime - bTime;
+				})
+				.map((info) => ({
+					info,
+					parts: partsMap.get(info.id) ?? [],
+				})),
+		[messagesMap, partsMap],
+	);
 
-	const toolCalls: ToolPart[] = messages.flatMap((m) =>
-		m.parts.filter((p): p is ToolPart => p.type === "tool"),
+	const toolCalls: ToolPart[] = useMemo(
+		() =>
+			messages.flatMap((m) =>
+				m.parts.filter((p): p is ToolPart => p.type === "tool"),
+			),
+		[messages],
 	);
 
 	const status: "pending" | "running" | "completed" | "error" = (() => {

@@ -130,19 +130,6 @@ export function TicketModal({
 		staleTime: 30000,
 	});
 
-	const recommendationsMutation =
-		api.ticket.generateRecommendations.useMutation({
-			onSuccess: () => {
-				ticketQuery.refetch().catch((error) => {
-					console.error("[TicketModal] Failed to refetch ticket data:", error);
-				});
-			},
-		});
-
-	const [liveAnalysisSteps, setLiveAnalysisSteps] = useState<
-		{ tool: string; title: string; status: string; id: string }[]
-	>([]);
-
 	const thisTicketAskPending = ticket?.id
 		? isAskOpencodePending(ticket.id)
 		: false;
@@ -164,30 +151,6 @@ export function TicketModal({
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [askOpencodeInFlight, askRunCompleted, onAskOpencodeComplete, ticket?.id]);
-
-	// Use SSE stream data for live analysis steps when available
-	useEffect(() => {
-		if (sseStream.toolCalls && sseStream.toolCalls.length > 0) {
-			// Transform SSE tool calls to the expected format
-			const steps = sseStream.toolCalls.map((t) => ({
-				id: t.id,
-				tool: t.tool,
-				title:
-					t.state.status === "completed" || t.state.status === "running"
-						? (t.state.title ?? "")
-						: "",
-				status: t.state.status,
-			}));
-			setLiveAnalysisSteps(steps);
-		}
-	}, [sseStream.toolCalls]);
-
-	useEffect(() => {
-		if (!askOpencodeInFlight && liveAnalysisSteps.length > 0) {
-			const timeout = setTimeout(() => setLiveAnalysisSteps([]), 500);
-			return () => clearTimeout(timeout);
-		}
-	}, [askOpencodeInFlight, liveAnalysisSteps.length]);
 
 	const handleAskOpencode = () => {
 		if (!ticket?.id) return;
@@ -431,64 +394,57 @@ export function TicketModal({
 							</TabsList>
 						</div>
 
-					{fullTicket && (
-						<TicketDetailsTab
-							latestRanking={latestRanking}
-							ticket={fullTicket}
+						{fullTicket && (
+							<TicketDetailsTab
+								latestRanking={latestRanking}
+								ticket={fullTicket}
+							/>
+						)}
+
+						<TicketRecommendationsTab
+							askOpencodeInFlight={askOpencodeInFlight}
+							liveToolCalls={sseStream.toolCalls}
+							onAskOpencode={handleAskOpencode}
+							onSwitchToAgent={(insight, date) => {
+								setActiveTab("agent-chat");
+								setReplyingToInsight({ insight, date });
+							}}
+							onSwitchToChat={(insight, date) => {
+								setActiveTab("chat");
+								setReplyingToInsight({ insight, date });
+							}}
+							opencodeAvailable={opencodeAvailable}
+							ticketId={ticket.id}
 						/>
-					)}
 
-					<TicketRecommendationsTab
-						askOpencodeInFlight={askOpencodeInFlight}
-						liveAnalysisSteps={liveAnalysisSteps}
-						onAskOpencode={handleAskOpencode}
-						onGenerateRecommendations={() => {
-							if (!ticket?.id) return;
-							recommendationsMutation.mutate({
-								ticketId: ticket.id,
-								availableProgrammers: [],
-							});
-						}}
-						onSwitchToAgent={(insight, date) => {
-							setActiveTab("agent-chat");
-							setReplyingToInsight({ insight, date });
-						}}
-						onSwitchToChat={(insight, date) => {
-							setActiveTab("chat");
-							setReplyingToInsight({ insight, date });
-						}}
-						opencodeAvailable={opencodeAvailable}
-						ticketId={ticket.id}
-					/>
+						<TicketChatTab
+							messages={messages}
+							onReplyingToInsightChange={setReplyingToInsight}
+							onTicketRefetch={() => {
+								ticketQuery.refetch().catch((error) => {
+									console.error(
+										"[TicketModal] Failed to refetch ticket data:",
+										error,
+									);
+								});
+							}}
+							replyingToInsight={replyingToInsight}
+							ticketId={ticket.id}
+						/>
 
-					<TicketChatTab
-						messages={messages}
-						onReplyingToInsightChange={setReplyingToInsight}
-						onTicketRefetch={() => {
-							ticketQuery.refetch().catch((error) => {
-								console.error(
-									"[TicketModal] Failed to refetch ticket data:",
-									error,
-								);
-							});
-						}}
-						replyingToInsight={replyingToInsight}
-						ticketId={ticket.id}
-					/>
-
-					<TicketAgentTab
-						activeTab={activeTab}
-						onReplyingToInsightChange={setReplyingToInsight}
-						onSessionIdChange={setOpencodeChatSessionId}
-						open={open}
-						opencodeAvailable={opencodeAvailable}
-						opencodeChatSessionId={opencodeChatSessionId}
-						replyingToInsight={replyingToInsight}
-						ticketId={ticket.id}
-					/>
-				</Tabs>
-			</DialogContent>
-		</Dialog>
+						<TicketAgentTab
+							activeTab={activeTab}
+							onReplyingToInsightChange={setReplyingToInsight}
+							onSessionIdChange={setOpencodeChatSessionId}
+							open={open}
+							opencodeAvailable={opencodeAvailable}
+							opencodeChatSessionId={opencodeChatSessionId}
+							replyingToInsight={replyingToInsight}
+							ticketId={ticket.id}
+						/>
+					</Tabs>
+				</DialogContent>
+			</Dialog>
 		</TooltipProvider>
 	);
 }

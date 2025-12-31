@@ -8,9 +8,7 @@ import {
 	buildChatSystemPrompt,
 	buildChatUserPrompt,
 	buildRankingPrompt,
-	buildRecommendedProgrammerPrompt,
 	buildRecommendedStepsPrompt,
-	DEFAULT_MODEL,
 	getActiveAIProvider,
 	isCerebrasConfigured,
 	isOpenRouterConfigured,
@@ -349,75 +347,6 @@ export const ticketRouter = createTRPCRouter({
 				.delete(ticketMessages)
 				.where(eq(ticketMessages.ticketId, input.ticketId));
 			return { success: true };
-		}),
-
-	/**
-	 * Generate/refresh recommendations for a ticket
-	 */
-	generateRecommendations: publicProcedure
-		.input(
-			z.object({
-				ticketId: z.string(),
-				availableProgrammers: z.array(z.string()).default([]),
-			}),
-		)
-		.mutation(async ({ ctx, input }) => {
-			// Get ticket
-			const ticket = await ctx.db.query.tickets.findFirst({
-				where: eq(tickets.id, input.ticketId),
-			});
-
-			if (!ticket) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Ticket not found",
-				});
-			}
-
-			const activeProvider = getActiveAIProvider();
-			if (activeProvider === "none") {
-				throw new TRPCError({
-					code: "PRECONDITION_FAILED",
-					message:
-						"AI not configured. Set OPENROUTER_API_KEY or CEREBRAS_API_KEY.",
-				});
-			}
-
-			// Generate recommended steps using the active provider
-			const stepsPrompt = buildRecommendedStepsPrompt(ticket);
-			const stepsResult = await analyzeWithAI(
-				stepsPrompt.system,
-				stepsPrompt.user,
-			);
-
-			// Generate recommended programmer (if available)
-			let programmerResult = { text: "" };
-			if (input.availableProgrammers.length > 0) {
-				const programmerPrompt = buildRecommendedProgrammerPrompt(
-					ticket,
-					input.availableProgrammers,
-				);
-				programmerResult = await analyzeWithAI(
-					programmerPrompt.system,
-					programmerPrompt.user,
-				);
-			}
-
-			// Determine which model was used for logging
-			const modelUsed = DEFAULT_MODEL;
-
-			// Save recommendation
-			const [recommendation] = await ctx.db
-				.insert(ticketRecommendations)
-				.values({
-					ticketId: input.ticketId,
-					recommendedSteps: stepsResult.text,
-					recommendedProgrammer: programmerResult.text || null,
-					modelUsed,
-				})
-				.returning();
-
-			return recommendation;
 		}),
 
 	/**

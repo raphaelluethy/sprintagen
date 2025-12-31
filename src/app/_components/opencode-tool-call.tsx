@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import type { ToolPart } from "@/server/tickets/opencode";
 
 type ToolState = ToolPart["state"];
@@ -250,6 +251,254 @@ export function OpencodeToolCallDisplay({ tool }: { tool: ToolPart }) {
 							s
 						</div>
 					)}
+				</div>
+			)}
+		</div>
+	);
+}
+
+// Live tool steps block for showing analysis progress (used in AI Insights tab)
+export function ToolStepsBlock({
+	toolParts,
+	timestamp,
+	model,
+}: {
+	toolParts: ToolPart[];
+	timestamp?: Date;
+	model?: string;
+}) {
+	const [isExpanded, setIsExpanded] = useState(false);
+
+	const completedCount = toolParts.filter(
+		(t) => t.state.status === "completed",
+	).length;
+	const runningCount = toolParts.filter(
+		(t) => t.state.status === "running",
+	).length;
+	const errorCount = toolParts.filter((t) => t.state.status === "error").length;
+
+	return (
+		<div className="relative pl-8">
+			<div className="absolute top-2 left-0 h-3.5 w-3.5 rounded-full border-2 border-background bg-amber-500 ring-4 ring-background" />
+
+			<div className="mb-2 flex items-center gap-2">
+				{timestamp && (
+					<time className="font-medium text-muted-foreground text-xs">
+						{timestamp.toLocaleString(undefined, {
+							dateStyle: "medium",
+							timeStyle: "short",
+						})}
+					</time>
+				)}
+				<span className="font-medium text-amber-600 text-xs uppercase tracking-wider dark:text-amber-400">
+					Working
+				</span>
+				{model && (
+					<Badge
+						className="h-5 px-1.5 font-normal text-[10px]"
+						variant="outline"
+					>
+						{model}
+					</Badge>
+				)}
+			</div>
+
+			<div className="overflow-hidden rounded-lg border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-amber-600/10">
+				<button
+					className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-amber-500/5"
+					onClick={() => setIsExpanded(!isExpanded)}
+					type="button"
+				>
+					<svg
+						aria-hidden="true"
+						className={`h-3.5 w-3.5 text-amber-600 transition-transform dark:text-amber-400 ${isExpanded ? "rotate-90" : ""}`}
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							d="M9 5l7 7-7 7"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth={2}
+						/>
+					</svg>
+
+					<div className="flex h-7 w-7 items-center justify-center rounded-md bg-amber-500/15">
+						<svg
+							aria-hidden="true"
+							className="h-4 w-4 text-amber-600 dark:text-amber-400"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={1.5}
+							/>
+						</svg>
+					</div>
+
+					<div className="flex-1">
+						<span className="font-medium text-foreground text-sm">
+							{toolParts.length} step{toolParts.length !== 1 ? "s" : ""}
+						</span>
+						<span className="ml-2 text-muted-foreground text-xs">
+							{runningCount > 0 && (
+								<span className="text-amber-600 dark:text-amber-400">
+									{runningCount} running
+								</span>
+							)}
+							{runningCount > 0 &&
+								(completedCount > 0 || errorCount > 0) &&
+								" · "}
+							{completedCount > 0 && <span>{completedCount} completed</span>}
+							{completedCount > 0 && errorCount > 0 && " · "}
+							{errorCount > 0 && (
+								<span className="text-destructive">{errorCount} failed</span>
+							)}
+						</span>
+					</div>
+
+					{/* Status indicator */}
+					{runningCount > 0 ? (
+						<div className="flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2 py-1">
+							<div className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+							<span className="font-medium text-[10px] text-amber-600 dark:text-amber-400">
+								Running
+							</span>
+						</div>
+					) : errorCount > 0 ? (
+						<div className="flex items-center gap-1.5 rounded-full bg-destructive/10 px-2 py-1">
+							<span className="text-destructive text-xs">!</span>
+							<span className="font-medium text-[10px] text-destructive">
+								Error
+							</span>
+						</div>
+					) : (
+						<div className="flex items-center gap-1.5 rounded-full bg-foreground/5 px-2 py-1">
+							<span className="text-muted-foreground text-xs">✓</span>
+							<span className="font-medium text-[10px] text-muted-foreground">
+								Done
+							</span>
+						</div>
+					)}
+				</button>
+
+				{isExpanded && (
+					<div className="border-amber-500/10 border-t bg-background/50 p-2">
+						<div className="space-y-1">
+							{toolParts.map((tool) => (
+								<ToolStepItem key={tool.id} tool={tool} />
+							))}
+						</div>
+					</div>
+				)}
+			</div>
+		</div>
+	);
+}
+
+// Individual tool step item used in ToolStepsBlock
+export function ToolStepItem({ tool }: { tool: ToolPart }) {
+	const [isExpanded, setIsExpanded] = useState(false);
+
+	const statusStyles = {
+		completed: "text-muted-foreground",
+		error: "text-destructive",
+		running: "text-amber-600 dark:text-amber-400",
+		pending: "text-muted-foreground/50",
+	};
+
+	const statusIcons = {
+		completed: "✓",
+		error: "✗",
+		running: "◎",
+		pending: "○",
+	};
+
+	const getToolSummary = () => {
+		const input = tool.state.input;
+		switch (tool.tool) {
+			case "read":
+				return input.filePath as string;
+			case "edit":
+			case "write":
+				return input.filePath as string;
+			case "bash":
+				return (input.command as string).slice(0, 60);
+			case "grep":
+			case "glob":
+				return input.pattern as string;
+			case "webfetch":
+				return input.url as string;
+			case "task":
+				return (
+					(input.description as string) ||
+					(input.prompt as string) ||
+					""
+				).slice(0, 60);
+			default:
+				return JSON.stringify(input).slice(0, 60);
+		}
+	};
+
+	const output =
+		tool.state.status === "completed"
+			? tool.state.output
+			: tool.state.status === "error"
+				? tool.state.error
+				: undefined;
+
+	return (
+		<div className="overflow-hidden rounded border border-border/40 bg-card/30">
+			<button
+				className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-secondary/30"
+				onClick={() => setIsExpanded(!isExpanded)}
+				type="button"
+			>
+				<span
+					className={`w-4 text-center ${statusStyles[tool.state.status]} ${tool.state.status === "running" ? "animate-pulse" : ""}`}
+				>
+					{statusIcons[tool.state.status]}
+				</span>
+				<span className="font-mono text-amber-700 dark:text-amber-300">
+					{tool.tool}
+				</span>
+				<span className="text-muted-foreground/50">→</span>
+				<span className="flex-1 truncate text-muted-foreground">
+					{getToolSummary()}
+				</span>
+				<svg
+					aria-hidden="true"
+					className={`h-3 w-3 text-muted-foreground/50 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						d="M9 5l7 7-7 7"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth={2}
+					/>
+				</svg>
+			</button>
+
+			{isExpanded && output && (
+				<div className="border-border/40 border-t bg-secondary/20 p-2">
+					<pre
+						className={`max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[11px] ${
+							tool.state.status === "error"
+								? "text-destructive"
+								: "text-muted-foreground"
+						}`}
+					>
+						{output.slice(0, 1500)}
+						{output.length > 1500 && "\n... (truncated)"}
+					</pre>
 				</div>
 			)}
 		</div>

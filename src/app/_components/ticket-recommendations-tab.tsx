@@ -13,176 +13,9 @@ import { api } from "@/trpc/react";
 import {
 	OpencodeReasoningDisplay,
 	OpencodeStepsCollapsible,
+	ToolStepsBlock,
 } from "./opencode-tool-call";
 import type { OpencodeChatMessage } from "./types";
-
-function LiveAnalysisProgress({
-	steps,
-}: {
-	steps: { tool: string; title: string; status: string; id: string }[];
-}) {
-	// Map tool names to user-friendly descriptions
-	const getToolDescription = (tool: string, title: string) => {
-		if (title) return title;
-
-		const toolDescriptions: Record<string, string> = {
-			read: "Reading file...",
-			write: "Writing file...",
-			edit: "Editing file...",
-			glob: "Searching for files...",
-			grep: "Searching in files...",
-			bash: "Running command...",
-			list: "Listing directory...",
-			search: "Searching codebase...",
-			task: "Running task...",
-		};
-
-		const lowerTool = tool.toLowerCase();
-		for (const [key, desc] of Object.entries(toolDescriptions)) {
-			if (lowerTool.includes(key)) return desc;
-		}
-		return `Running ${tool}...`;
-	};
-
-	const getStatusIcon = (status: string) => {
-		switch (status) {
-			case "completed":
-				return (
-					<svg
-						aria-hidden="true"
-						className="h-3.5 w-3.5 text-green-500"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							d="M5 13l4 4L19 7"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth={2}
-						/>
-					</svg>
-				);
-			case "error":
-				return (
-					<svg
-						aria-hidden="true"
-						className="h-3.5 w-3.5 text-destructive"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							d="M6 18L18 6M6 6l12 12"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth={2}
-						/>
-					</svg>
-				);
-			case "running":
-			case "pending":
-			default:
-				return (
-					<svg
-						aria-hidden="true"
-						className="h-3.5 w-3.5 animate-spin text-muted-foreground"
-						fill="none"
-						viewBox="0 0 24 24"
-					>
-						<circle
-							className="opacity-25"
-							cx="12"
-							cy="12"
-							r="10"
-							stroke="currentColor"
-							strokeWidth="4"
-						/>
-						<path
-							className="opacity-75"
-							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-							fill="currentColor"
-						/>
-					</svg>
-				);
-		}
-	};
-
-	return (
-		<div className="space-y-3">
-			<div className="flex items-center gap-2">
-				<svg
-					aria-hidden="true"
-					className="h-4 w-4 animate-pulse text-foreground"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path
-						d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						strokeWidth={2}
-					/>
-				</svg>
-				<span className="font-medium text-foreground text-sm">
-					Analyzing with Agent...
-				</span>
-			</div>
-
-			{steps.length === 0 ? (
-				<div className="flex items-center gap-2 rounded-md border border-border/60 bg-card/50 px-3 py-2">
-					<svg
-						aria-hidden="true"
-						className="h-3.5 w-3.5 animate-spin text-muted-foreground"
-						fill="none"
-						viewBox="0 0 24 24"
-					>
-						<circle
-							className="opacity-25"
-							cx="12"
-							cy="12"
-							r="10"
-							stroke="currentColor"
-							strokeWidth="4"
-						/>
-						<path
-							className="opacity-75"
-							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-							fill="currentColor"
-						/>
-					</svg>
-					<span className="text-muted-foreground text-sm">
-						Starting analysis...
-					</span>
-				</div>
-			) : (
-				<div className="space-y-1.5">
-					{steps.map((step, index) => (
-						<div
-							className={`flex items-center gap-2 rounded-md border px-3 py-2 transition-all ${
-								index === steps.length - 1 &&
-								(step.status === "running" || step.status === "pending")
-									? "border-foreground/20 bg-foreground/5"
-									: "border-border/60 bg-card/50"
-							}`}
-							key={step.id}
-						>
-							{getStatusIcon(step.status)}
-							<span className="font-mono text-muted-foreground text-xs">
-								{step.tool}
-							</span>
-							<span className="text-muted-foreground">→</span>
-							<span className="flex-1 truncate text-sm">
-								{getToolDescription(step.tool, step.title)}
-							</span>
-						</div>
-					))}
-				</div>
-			)}
-		</div>
-	);
-}
 
 function RecommendationsList({
 	ticketId,
@@ -234,8 +67,7 @@ function RecommendationsList({
 			<div className="flex flex-col items-center justify-center py-12 text-center">
 				<p className="text-muted-foreground text-sm">No recommendations yet</p>
 				<p className="text-muted-foreground/60 text-xs">
-					Click &ldquo;Regenerate&rdquo; to generate AI recommendations or
-					&ldquo;Ask Agent&rdquo; for implementation analysis
+					Click &ldquo;Ask Agent&rdquo; for implementation analysis
 				</p>
 			</div>
 		);
@@ -372,14 +204,8 @@ interface TicketRecommendationsTabProps {
 	ticketId: string;
 	opencodeAvailable: boolean;
 	askOpencodeInFlight: boolean;
-	liveAnalysisSteps: {
-		tool: string;
-		title: string;
-		status: string;
-		id: string;
-	}[];
+	liveToolCalls: ToolPart[];
 	onAskOpencode: () => void;
-	onGenerateRecommendations: () => void;
 	onSwitchToChat: (insight: string, date: Date) => void;
 	onSwitchToAgent: (insight: string, date: Date) => void;
 }
@@ -388,15 +214,11 @@ export function TicketRecommendationsTab({
 	ticketId,
 	opencodeAvailable,
 	askOpencodeInFlight,
-	liveAnalysisSteps,
+	liveToolCalls,
 	onAskOpencode,
-	onGenerateRecommendations,
 	onSwitchToChat,
 	onSwitchToAgent,
 }: TicketRecommendationsTabProps) {
-	const recommendationsMutation =
-		api.ticket.generateRecommendations.useMutation();
-
 	const sessionHistoryQuery = api.ticket.getSessionHistory.useQuery(
 		{ ticketId },
 		{
@@ -445,24 +267,62 @@ export function TicketRecommendationsTab({
 							</span>
 						)}
 					</Button>
-					<Button
-						disabled={recommendationsMutation.isPending}
-						onClick={onGenerateRecommendations}
-						size="sm"
-						variant="outline"
-					>
-						{recommendationsMutation.isPending ? "Generating..." : "Regenerate"}
-					</Button>
 				</div>
 
-				{recommendationsMutation.isPending ? (
+				{askOpencodeInFlight ? (
 					<div className="space-y-3">
-						<Skeleton className="h-4 w-full" />
-						<Skeleton className="h-4 w-3/4" />
-						<Skeleton className="h-4 w-5/6" />
+						<div className="flex items-center gap-2">
+							<svg
+								aria-hidden="true"
+								className="h-4 w-4 animate-pulse text-foreground"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+								/>
+							</svg>
+							<span className="font-medium text-foreground text-sm">
+								Analyzing with Agent...
+							</span>
+						</div>
+						{liveToolCalls.length === 0 ? (
+							<div className="flex items-center gap-2 rounded-md border border-border/60 bg-card/50 px-3 py-2">
+								<svg
+									aria-hidden="true"
+									className="h-3.5 w-3.5 animate-spin text-muted-foreground"
+									fill="none"
+									viewBox="0 0 24 24"
+								>
+									<circle
+										className="opacity-25"
+										cx="12"
+										cy="12"
+										r="10"
+										stroke="currentColor"
+										strokeWidth="4"
+									/>
+									<path
+										className="opacity-75"
+										d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+										fill="currentColor"
+									/>
+								</svg>
+								<span className="text-muted-foreground text-sm">
+									Starting analysis...
+								</span>
+							</div>
+						) : (
+							<div className="relative">
+								<div className="absolute top-2 left-[7px] h-[calc(100%-16px)] w-px bg-border/60" />
+								<ToolStepsBlock toolParts={liveToolCalls} />
+							</div>
+						)}
 					</div>
-				) : askOpencodeInFlight ? (
-					<LiveAnalysisProgress steps={liveAnalysisSteps} />
 				) : (
 					<RecommendationsList
 						onAgentContext={onSwitchToAgent}
