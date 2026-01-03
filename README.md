@@ -22,6 +22,7 @@ AI-powered ticket management that intelligently analyzes, ranks, and manages tic
 - **AI**: Vercel AI SDK with Cerebras and OpenRouter providers
 - **UI**: Tailwind CSS 4 + Radix UI components
 - **Linting**: Biome
+- **Testing**: Vitest
 
 ## Quick Start
 
@@ -75,6 +76,11 @@ bun run check:write  # Biome with safe auto-fixes
 bun run format       # Format code
 bun run typecheck    # TypeScript check
 
+# Testing
+bun run test         # Run tests once
+bun run test:watch   # Run tests in watch mode
+bun run test:coverage # Run tests with coverage
+
 # Database
 bun run db:generate  # Generate Drizzle migrations
 bun run db:migrate   # Apply migrations
@@ -92,16 +98,28 @@ make down            # Stop and clean up containers
 ```
 src/
 ├── app/                    # Next.js App Router pages
-│   ├── _components/        # Page-specific components (ticket-modal/, ticket-table/)
+│   ├── _components/        # Page-specific components
+│   │   ├── ticket-modal/   # Ticket detail modal
+│   │   └── ticket-table/   # Table with control-bar, table-row
 │   ├── api/
 │   │   ├── auth/[...all]/  # Better Auth routes
 │   │   └── trpc/[trpc]/    # tRPC handler
 │   └── layout.tsx          # Root layout with providers
 │
-├── components/ui/          # Reusable Radix UI components
+├── components/
+│   ├── ui/                 # Reusable Radix UI components
+│   └── chat/               # Chat display components
+│       └── tools/          # ToolCallDisplay, StepsCollapsible, ReasoningDisplay
+│
+├── lib/
+│   └── constants/          # Shared style constants (PRIORITY_STYLES, STATUS_STYLES)
 │
 ├── server/
 │   ├── ai/                 # AI providers (cerebras.ts, openrouter.ts, prompts.ts)
+│   ├── ai-agents/          # Agent provider strategy pattern
+│   │   ├── registry.ts     # Agent registry (single-active-agent)
+│   │   ├── model-selector.ts # Model selection (fast/standard/premium)
+│   │   └── providers/      # opencode/, mock/
 │   ├── api/                # tRPC routers
 │   │   ├── root.ts         # Router composition
 │   │   ├── trpc.ts         # Context, procedures, middleware
@@ -109,6 +127,17 @@ src/
 │   ├── db/                 # Drizzle schema and client
 │   └── tickets/
 │       └── providers/      # Jira, Linear, Docker integrations (base.ts pattern)
+│
+├── types/                  # Centralized type definitions
+│   ├── ticket.ts           # Ticket, TicketWithRelations, RankingResult
+│   ├── opencode.ts         # TransformedMessage, OpencodeResult
+│   ├── ai-agent.ts         # AgentProvider, AgentSession interfaces
+│   └── index.ts            # Re-exports all types
+│
+├── test/                   # Test utilities and fixtures
+│   ├── fixtures/           # Test data
+│   ├── mocks/              # Mock implementations
+│   └── utils.ts            # Shared test helpers
 │
 ├── trpc/                   # tRPC client setup (react.tsx, query-client.ts)
 ├── hooks/                  # Custom React hooks
@@ -118,6 +147,40 @@ src/
 ### Key Patterns
 
 **Ticket Providers**: New providers extend `src/server/tickets/providers/base.ts` interface. See `jira.ts`, `linear.ts`, `docker.ts` for examples.
+
+**AI Agent Providers**: Implements a strategy pattern in `src/server/ai-agents/`. The `AgentRegistry` manages providers with a single-active-agent model. New agents implement the `AgentProvider` interface:
+
+```typescript
+import { agentRegistry, OpencodeProvider } from "@/server/ai-agents";
+
+// Register provider
+agentRegistry.register(new OpencodeProvider());
+
+// Use active provider
+const provider = agentRegistry.getActive();
+const session = await provider.createSession("My Chat");
+const response = await provider.sendMessage(session.id, "Hello!");
+```
+
+**Model Selection**: Use `getDefaultModel()` from `src/server/ai-agents/model-selector.ts` for consistent model selection based on `FAST_MODE` environment variable. Supports fast, standard, and premium tiers.
+
+**Centralized Types**: Import shared types from `@/types` instead of defining inline:
+
+```typescript
+import type { Ticket, TicketWithRelations, AgentProvider } from "@/types";
+```
+
+**Chat Components**: Import display components from `@/components/chat`:
+
+```typescript
+import { ToolCallDisplay, StepsCollapsible, ReasoningDisplay } from "@/components/chat";
+```
+
+**Style Constants**: Import shared style mappings from `@/lib/constants`:
+
+```typescript
+import { PRIORITY_STYLES, STATUS_STYLES } from "@/lib/constants";
+```
 
 **tRPC Procedures**: Add to `src/server/api/routers/` and register in `root.ts`. Use `protectedProcedure` for authenticated routes.
 
@@ -141,7 +204,7 @@ Optional:
 
 ## Development Notes
 
-- **No test framework** is currently configured
+- **Testing**: Vitest is configured with tests in `src/**/*.test.ts`. Use `MockAgentProvider` from `@/server/ai-agents` for testing agent interactions.
 - **Dev auth bypass**: In development, `protectedProcedure` uses a mock user when unauthenticated
 - **Polling-based sync**: Ticket sync uses polling
 - **Opencode SSE**: The Opencode chat feature uses Server-Sent Events (SSE) for real-time updates via `useOpencodeSSE` hook and `/api/opencode/events` endpoint

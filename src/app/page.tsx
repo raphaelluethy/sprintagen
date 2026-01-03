@@ -12,17 +12,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useActiveSessions } from "@/hooks/useActiveSessions";
-import type {
-	ticketRankings,
-	ticketRecommendations,
-	tickets,
-} from "@/server/db/schema";
 import { api } from "@/trpc/react";
+import type { TicketWithRelations } from "@/types";
 
-type Ticket = typeof tickets.$inferSelect & {
-	recommendations?: (typeof ticketRecommendations.$inferSelect)[];
-	rankings?: (typeof ticketRankings.$inferSelect)[];
-};
+type Ticket = TicketWithRelations;
 
 function DashboardContent() {
 	const router = useRouter();
