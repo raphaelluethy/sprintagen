@@ -80,8 +80,6 @@ function LiveAnalysisProgress({
 						/>
 					</svg>
 				);
-			case "running":
-			case "pending":
 			default:
 				return (
 					<svg

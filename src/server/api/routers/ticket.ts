@@ -888,30 +888,28 @@ export const ticketRouter = createTRPCRouter({
 				? `${stepsPrompt.system}\n\n${stepsPrompt.user}\n\nUser Question: ${input.question}`
 				: `${stepsPrompt.system}\n\n${stepsPrompt.user}`;
 
-			// Send the prompt to Opencode
-			// We don't await the full completion here to avoid blocking the UI for too long
-			// The frontend will poll for updates
-			const messageResult = await sendOpencodeMessage(
-				input.ticketId,
-				ticket.title,
-				fullPrompt,
-				sessionId,
-			);
-
-			if (!messageResult.success) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: messageResult.error,
+			// Send the prompt to Opencode in fire-and-forget mode
+			// We return the sessionId immediately so the UI can connect via SSE
+			// The completion will be handled asynchronously
+			sendOpencodeMessage(input.ticketId, ticket.title, fullPrompt, sessionId)
+				.then(async (messageResult) => {
+					if (messageResult.success) {
+						// Save the result as a recommendation so the UI can display it
+						await ctx.db.insert(ticketRecommendations).values({
+							ticketId: input.ticketId,
+							recommendedSteps: messageResult.data.message.text,
+							opencodeSummary: messageResult.data.message.reasoning ?? null,
+							modelUsed: messageResult.data.message.model ?? "opencode-agent",
+						});
+					} else {
+						console.error(
+							`[askOpencode] Failed to send message: ${messageResult.error}`,
+						);
+					}
+				})
+				.catch((err) => {
+					console.error(`[askOpencode] Error sending message:`, err);
 				});
-			}
-
-			// Save the result as a recommendation so the UI can display it
-			await ctx.db.insert(ticketRecommendations).values({
-				ticketId: input.ticketId,
-				recommendedSteps: messageResult.data.message.text,
-				opencodeSummary: messageResult.data.message.reasoning ?? null, // Use reasoning as summary if available
-				modelUsed: messageResult.data.message.model ?? "opencode-agent",
-			});
 
 			return { success: true, sessionId };
 		}),

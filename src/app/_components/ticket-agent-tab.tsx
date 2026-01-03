@@ -354,6 +354,7 @@ export function TicketAgentTab({
 		},
 	});
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: startSessionMutation.mutate is stable but creates new reference each render
 	useEffect(() => {
 		if (
 			activeTab === "agent-chat" &&
@@ -371,7 +372,6 @@ export function TicketAgentTab({
 		open,
 		sessionRequested,
 		opencodeStatusQuery.data?.available,
-		startSessionMutation,
 	]);
 
 	const sseConnection = useOpencodeSSE(
@@ -438,6 +438,7 @@ export function TicketAgentTab({
 				role: "user",
 				text: variables.message,
 				createdAt: new Date(),
+				parts: [],
 			};
 			setOptimisticOpencodeMessages((prev) => [...prev, optimisticMessage]);
 			setOpencodeChatInput("");
