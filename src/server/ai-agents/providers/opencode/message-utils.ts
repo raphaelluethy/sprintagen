@@ -77,7 +77,7 @@ export function extractToolCalls(parts: Part[]): ToolCallInfo[] {
  * Get formatted model label from message
  *
  * @param message - SDK message object
- * @returns Model label like "opencode/big-pickle" or undefined
+ * @returns Model label like "opencode/minimax-m2.1-free" or undefined
  */
 export function getModelLabel(message: Message): string | undefined {
 	if ("model" in message && message.model) {

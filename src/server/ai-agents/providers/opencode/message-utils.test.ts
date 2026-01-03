@@ -247,12 +247,12 @@ describe("message-utils", () => {
 				id: "m1",
 				sessionID: "s1",
 				role: "assistant" as const,
-				model: { providerID: "opencode", modelID: "big-pickle" },
+				model: { providerID: "opencode", modelID: "minimax-m2.1-free" },
 			} as unknown as Message;
 
 			const result = getModelLabel(message);
 
-			expect(result).toBe("opencode/big-pickle");
+			expect(result).toBe("opencode/minimax-m2.1-free");
 		});
 
 		it("extracts model from top-level fields", () => {
@@ -379,7 +379,7 @@ describe("message-utils", () => {
 				id: "m1",
 				sessionID: "s1",
 				role: "assistant" as const,
-				model: { providerID: "opencode", modelID: "big-pickle" },
+				model: { providerID: "opencode", modelID: "minimax-m2.1-free" },
 				time: { created: 1705320000000 },
 			} as unknown as Message;
 
@@ -398,7 +398,7 @@ describe("message-utils", () => {
 			expect(result.id).toBe("m1");
 			expect(result.role).toBe("assistant");
 			expect(result.text).toBe("Hello, world!");
-			expect(result.model).toBe("opencode/big-pickle");
+			expect(result.model).toBe("opencode/minimax-m2.1-free");
 			expect(result.sessionId).toBe("s1");
 			expect(result.parts).toEqual(parts);
 		});

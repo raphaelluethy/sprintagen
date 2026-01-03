@@ -4,16 +4,20 @@
  * Implementation of AgentProvider for the OpenCode SDK.
  */
 
-import type { Session } from "@opencode-ai/sdk";
-import { getDefaultModel } from "../../model-selector";
+import type { Session, ToolPart } from "@opencode-ai/sdk";
 import type {
+	AgentCapabilities,
 	AgentMessage,
 	AgentProvider,
 	AgentSession,
 	SendMessageOptions,
-} from "../../types";
+	SessionDiffItem,
+	SessionStatusInfo,
+	SessionTodoItem,
+} from "@/types/ai-agent";
+import { getDefaultModel } from "../../model-selector";
 import { getOpencodeClient } from "./client";
-import { transformMessage } from "./message-utils";
+import { getCurrentToolCalls, transformMessage } from "./message-utils";
 
 /**
  * OpenCode agent provider implementation
@@ -57,6 +61,20 @@ export class OpencodeProvider implements AgentProvider {
 		} catch {
 			return false;
 		}
+	}
+
+	/**
+	 * Get capabilities supported by this provider
+	 */
+	getCapabilities(): AgentCapabilities {
+		return {
+			sessionStatus: true,
+			toolCalls: true,
+			sessionDiff: true,
+			sessionTodos: true,
+			asyncPrompts: true,
+			subagents: true,
+		};
 	}
 
 	/**
@@ -237,5 +255,113 @@ export class OpencodeProvider implements AgentProvider {
 	 */
 	getEventSourceUrl(sessionId: string): string {
 		return `/api/opencode/events?sessionId=${sessionId}`;
+	}
+
+	// ========================================================================
+	// Extended Capabilities
+	// ========================================================================
+
+	/**
+	 * Get session status
+	 *
+	 * @param sessionId - The session ID
+	 */
+	async getSessionStatus(sessionId: string): Promise<SessionStatusInfo> {
+		const client = getOpencodeClient();
+		const result = await client.session.status();
+		const status = result.data?.[sessionId];
+		return status ?? { type: "idle" };
+	}
+
+	/**
+	 * Get all session statuses
+	 */
+	async getAllSessionStatuses(): Promise<Record<string, SessionStatusInfo>> {
+		const client = getOpencodeClient();
+		const result = await client.session.status();
+		return (result.data as Record<string, SessionStatusInfo>) ?? {};
+	}
+
+	/**
+	 * Get tool calls for a session
+	 *
+	 * @param sessionId - The session ID
+	 */
+	async getToolCalls(sessionId: string): Promise<ToolPart[]> {
+		const client = getOpencodeClient();
+		const messagesResult = await client.session.messages({
+			path: { id: sessionId },
+		});
+		const allParts = (messagesResult.data ?? []).flatMap((m) => m.parts);
+		return getCurrentToolCalls(allParts);
+	}
+
+	/**
+	 * Get session diff (code changes)
+	 *
+	 * @param sessionId - The session ID
+	 */
+	async getSessionDiff(sessionId: string): Promise<SessionDiffItem[]> {
+		const client = getOpencodeClient();
+		const result = await client.session.diff({ path: { id: sessionId } });
+		// SDK returns FileDiff[] with { file, before, after, additions, deletions }
+		const fileDiffs = result.data ?? [];
+		return fileDiffs.map((diff) => ({
+			path: diff.file,
+			status: (diff.additions > 0 && diff.deletions === 0
+				? "added"
+				: diff.deletions > 0 && diff.additions === 0
+					? "deleted"
+					: "modified") as "added" | "modified" | "deleted",
+			diff: `${diff.before}\n---\n${diff.after}`,
+		}));
+	}
+
+	/**
+	 * Get session todos
+	 *
+	 * @param sessionId - The session ID
+	 */
+	async getSessionTodos(sessionId: string): Promise<SessionTodoItem[]> {
+		const client = getOpencodeClient();
+		const result = await client.session.todo({ path: { id: sessionId } });
+		// SDK returns Todo[] with { id, content, status, priority }
+		const todos = result.data ?? [];
+		return todos.map((todo) => ({
+			id: todo.id,
+			content: todo.content,
+			status: (todo.status === "in_progress"
+				? "in_progress"
+				: todo.status === "completed"
+					? "completed"
+					: "pending") as "pending" | "in_progress" | "completed",
+		}));
+	}
+
+	/**
+	 * Send async prompt without waiting for response
+	 *
+	 * @param sessionId - Session to send to
+	 * @param message - Message content
+	 * @param options - Send options
+	 */
+	async sendMessageAsync(
+		sessionId: string,
+		message: string,
+		options?: SendMessageOptions,
+	): Promise<void> {
+		const client = getOpencodeClient();
+		const model = options?.model ?? getDefaultModel();
+
+		await client.session.promptAsync({
+			path: { id: sessionId },
+			body: {
+				parts: [{ type: "text" as const, text: message }],
+				model: {
+					providerID: model.providerId,
+					modelID: model.modelId,
+				},
+			},
+		});
 	}
 }

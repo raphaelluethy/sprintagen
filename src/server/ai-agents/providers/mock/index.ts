@@ -6,11 +6,12 @@
  */
 
 import type {
+	AgentCapabilities,
 	AgentMessage,
 	AgentProvider,
 	AgentSession,
 	SendMessageOptions,
-} from "../../types";
+} from "@/types/ai-agent";
 
 /**
  * Mock configuration for responses
@@ -114,6 +115,21 @@ export class MockAgentProvider implements AgentProvider {
 			throw error;
 		}
 		return true;
+	}
+
+	/**
+	 * Get capabilities supported by this provider
+	 * Mock provider doesn't support extended capabilities
+	 */
+	getCapabilities(): AgentCapabilities {
+		return {
+			sessionStatus: false,
+			toolCalls: false,
+			sessionDiff: false,
+			sessionTodos: false,
+			asyncPrompts: false,
+			subagents: false,
+		};
 	}
 
 	async createSession(title?: string): Promise<AgentSession> {

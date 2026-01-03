@@ -11,6 +11,7 @@
 
 // Agent provider types
 export type {
+	AgentCapabilities,
 	AgentMessage,
 	AgentProvider,
 	AgentRegistryConfig,
@@ -21,6 +22,9 @@ export type {
 	ModelSelectorConfig,
 	ModelTier,
 	SendMessageOptions,
+	SessionDiffItem,
+	SessionStatusInfo,
+	SessionTodoItem,
 } from "./ai-agent";
 
 // OpenCode/Message types

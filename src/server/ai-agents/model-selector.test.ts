@@ -18,7 +18,7 @@ describe("model-selector", () => {
 			const model = getDefaultModel({ fastMode: false });
 
 			expect(model.providerId).toBe("opencode");
-			expect(model.modelId).toBe("big-pickle");
+			expect(model.modelId).toBe("minimax-m2.1-free");
 		});
 
 		it("returns fast model when fastMode is true", () => {
@@ -55,7 +55,7 @@ describe("model-selector", () => {
 			const model = getModelForTier("standard");
 
 			expect(model.providerId).toBe("opencode");
-			expect(model.modelId).toBe("big-pickle");
+			expect(model.modelId).toBe("minimax-m2.1-free");
 		});
 
 		it("returns premium tier model", () => {
@@ -70,10 +70,10 @@ describe("model-selector", () => {
 		it("formats provider and model as slash-separated string", () => {
 			const label = formatModelLabel({
 				providerId: "opencode",
-				modelId: "big-pickle",
+				modelId: "minimax-m2.1-free",
 			});
 
-			expect(label).toBe("opencode/big-pickle");
+			expect(label).toBe("opencode/minimax-m2.1-free");
 		});
 	});
 });

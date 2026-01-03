@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ToolPart } from "@/server/tickets/opencode";
+import { api } from "@/trpc/react";
 import { ToolCallDisplay } from "./tool-call-display";
 
 interface StepsCollapsibleProps {
@@ -13,6 +14,16 @@ interface StepsCollapsibleProps {
  */
 export function StepsCollapsible({ toolParts }: StepsCollapsibleProps) {
 	const [isExpanded, setIsExpanded] = useState(false);
+	const { data: capabilities } = api.agentServer.getCapabilities.useQuery();
+
+	// Show placeholder if provider doesn't support tool calls
+	if (!capabilities?.toolCalls) {
+		return (
+			<div className="mt-3 rounded-md border border-border/40 bg-muted/30 px-3 py-2 text-muted-foreground text-xs italic">
+				Tool call tracking not available for this provider
+			</div>
+		);
+	}
 
 	if (toolParts.length === 0) return null;
 

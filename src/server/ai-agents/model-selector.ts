@@ -18,7 +18,7 @@ const MODEL_TIERS: Record<ModelTier, ModelSelection> = {
 	},
 	standard: {
 		providerId: "opencode",
-		modelId: "big-pickle",
+		modelId: "minimax-m2.1-free",
 	},
 	premium: {
 		providerId: "anthropic",
