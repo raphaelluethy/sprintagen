@@ -7,13 +7,19 @@
 import type { AgentMessage, AgentSession } from "@/types";
 
 /**
+ * Counter for generating unique IDs in tests
+ * Prevents collisions when multiple mocks are created in the same millisecond
+ */
+let mockCounter = 0;
+
+/**
  * Create a mock agent session for testing
  */
 export function createMockSession(
 	overrides?: Partial<AgentSession>,
 ): AgentSession {
 	return {
-		id: `test-session-${Date.now()}`,
+		id: `test-session-${Date.now()}-${mockCounter++}`,
 		title: "Test Session",
 		status: "idle",
 		createdAt: new Date(),
@@ -28,7 +34,7 @@ export function createMockMessage(
 	overrides?: Partial<AgentMessage>,
 ): AgentMessage {
 	return {
-		id: `test-msg-${Date.now()}`,
+		id: `test-msg-${Date.now()}-${mockCounter++}`,
 		role: "assistant",
 		content: "Test response",
 		createdAt: new Date(),

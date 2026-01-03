@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { MockAgentProvider } from "./index";
 
 describe("MockAgentProvider", () => {
@@ -93,15 +93,15 @@ describe("MockAgentProvider", () => {
 		const provider = new MockAgentProvider();
 		provider.simulateError(new Error("Simulated failure"));
 
-		await expect(provider.checkHealth()).rejects.toThrow("Simulated failure");
+		expect(provider.checkHealth()).rejects.toThrow("Simulated failure");
 	});
 
 	it("clears error after it fires", async () => {
 		const provider = new MockAgentProvider();
 		provider.simulateError(new Error("One-time error"));
 
-		await expect(provider.checkHealth()).rejects.toThrow();
-		await expect(provider.checkHealth()).resolves.toBe(true);
+		expect(provider.checkHealth()).rejects.toThrow();
+		expect(provider.checkHealth()).resolves.toBe(true);
 	});
 
 	it("resets all state", async () => {
@@ -130,7 +130,7 @@ describe("MockAgentProvider", () => {
 	it("throws when sending to non-existent session", async () => {
 		const provider = new MockAgentProvider();
 
-		await expect(provider.sendMessage("non-existent", "Hello")).rejects.toThrow(
+		expect(provider.sendMessage("non-existent", "Hello")).rejects.toThrow(
 			"Session non-existent not found",
 		);
 	});

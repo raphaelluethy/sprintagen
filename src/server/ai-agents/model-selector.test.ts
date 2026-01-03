@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, mock } from "bun:test";
 import {
 	formatModelLabel,
 	getDefaultModel,
@@ -6,7 +6,7 @@ import {
 } from "./model-selector";
 
 // Mock the env module
-vi.mock("@/env", () => ({
+mock.module("@/env", () => ({
 	env: {
 		FAST_MODE: false,
 	},

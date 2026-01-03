@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, mock } from "bun:test";
 import { MockAgentProvider } from "./providers/mock";
 import { AgentRegistry } from "./registry";
 
@@ -83,7 +83,7 @@ describe("AgentRegistry", () => {
 
 	it("emits events on provider registration", () => {
 		const registry = new AgentRegistry();
-		const listener = vi.fn();
+		const listener = mock(() => {});
 
 		registry.subscribe(listener);
 		registry.register(new MockAgentProvider());
@@ -100,7 +100,7 @@ describe("AgentRegistry", () => {
 
 	it("allows unsubscribing from events", () => {
 		const registry = new AgentRegistry();
-		const listener = vi.fn();
+		const listener = mock(() => {});
 
 		const unsubscribe = registry.subscribe(listener);
 		unsubscribe();

@@ -8,6 +8,7 @@ import type {
 import { eq } from "drizzle-orm";
 import { env } from "@/env";
 import { getOpencodeClient } from "@/lib/opencode-client";
+import { getDefaultModel } from "@/server/ai-agents/model-selector";
 import { db } from "@/server/db";
 import { opencodeSessionsTable, tickets } from "@/server/db/schema";
 import {
@@ -391,18 +392,14 @@ export async function sendOpencodeMessage(
 	}
 
 	try {
+		const model = getDefaultModel();
 		const payload = {
 			agent: "docs-agent",
 			parts: [{ type: "text" as const, text: userMessage }],
-			model: env.FAST_MODE
-				? {
-						providerID: "cerebras",
-						modelID: "zai-glm-4.6",
-					}
-				: {
-						providerID: "opencode",
-						modelID: "minimax-m2.1-free",
-					},
+			model: {
+				providerID: model.providerId,
+				modelID: model.modelId,
+			},
 		};
 
 		const client = getOpencodeClient();
