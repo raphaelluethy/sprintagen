@@ -111,10 +111,14 @@ export function useAgentMessages(sessionId: string | null) {
 						(p): p is Extract<Part, { type: "file" }> => p.type === "file",
 					)
 					.map((p) => {
-						// @ts-expect-error - SDK types might be incomplete in our view
-						const content = p.content ?? p.data ?? "";
-						// @ts-expect-error - SDK types might be incomplete in our view
-						const mimeType = p.mimeType ?? "application/octet-stream";
+						// Type assertion for file part properties that may not be fully typed in SDK
+						const filePart = p as {
+							content?: string;
+							data?: string;
+							mimeType?: string;
+						};
+						const content = filePart.content ?? filePart.data ?? "";
+						const mimeType = filePart.mimeType ?? "application/octet-stream";
 						return `[File: ${mimeType}]\n${content}`;
 					});
 

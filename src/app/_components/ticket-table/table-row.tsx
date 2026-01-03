@@ -70,7 +70,7 @@ export function TicketRow({
 					className={`font-normal text-xs ${PRIORITY_STYLES[ticket.priority ?? "medium"]}`}
 					variant="secondary"
 				>
-					{ticket.priority}
+					{ticket.priority ?? "medium"}
 				</Badge>
 			</TableCell>
 			<TableCell>
