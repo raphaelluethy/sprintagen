@@ -3,7 +3,6 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -206,13 +205,13 @@ export function TicketModal({
 								{/* Metadata row */}
 								<div className="flex flex-wrap items-center gap-3">
 									<Badge
-										className={`text-[11px] font-medium ${STATUS_STYLES[ticket.status]}`}
+										className={`font-medium text-[11px] ${STATUS_STYLES[ticket.status]}`}
 										variant="outline"
 									>
 										{ticket.status.replace("_", " ")}
 									</Badge>
 									<Badge
-										className={`text-[11px] font-medium ${PRIORITY_STYLES[ticket.priority ?? "medium"]}`}
+										className={`font-medium text-[11px] ${PRIORITY_STYLES[ticket.priority ?? "medium"]}`}
 										variant="outline"
 									>
 										<span className="mr-1 opacity-70">
@@ -228,6 +227,7 @@ export function TicketModal({
 									>
 										{ticket.provider === "jira" && (
 											<svg
+												aria-hidden="true"
 												className="h-3.5 w-3.5"
 												fill="currentColor"
 												viewBox="0 0 24 24"
@@ -237,6 +237,7 @@ export function TicketModal({
 										)}
 										{ticket.provider === "linear" && (
 											<svg
+												aria-hidden="true"
 												className="h-3.5 w-3.5"
 												fill="currentColor"
 												viewBox="0 0 24 24"
@@ -261,6 +262,7 @@ export function TicketModal({
 											<span className="text-muted-foreground/30">·</span>
 											<span className="flex items-center gap-1.5 text-muted-foreground text-xs">
 												<svg
+													aria-hidden="true"
 													className="h-3.5 w-3.5"
 													fill="none"
 													stroke="currentColor"
@@ -283,11 +285,11 @@ export function TicketModal({
 							{/* AI Score panel */}
 							{latestRanking && (
 								<div className="shrink-0 rounded-lg border border-border/30 bg-card/50 p-4 text-center">
-									<div className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">
+									<div className="font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
 										AI Priority
 									</div>
 									<div
-										className={`font-mono text-3xl font-semibold tabular-nums ${
+										className={`font-mono font-semibold text-3xl tabular-nums ${
 											latestRanking.overallScore >= 7
 												? "text-red-400"
 												: latestRanking.overallScore >= 5
@@ -316,10 +318,11 @@ export function TicketModal({
 						<div className="shrink-0 border-border/20 border-b bg-muted/10 px-6 pt-2">
 							<TabsList className="h-auto gap-1 bg-transparent p-0">
 								<TabsTrigger
-									className="relative rounded-none border-b-2 border-transparent bg-transparent px-4 py-2.5 text-xs font-medium text-muted-foreground transition-all hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+									className="relative rounded-none border-transparent border-b-2 bg-transparent px-4 py-2.5 font-medium text-muted-foreground text-xs transition-all hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
 									value="details"
 								>
 									<svg
+										aria-hidden="true"
 										className="mr-1.5 h-3.5 w-3.5"
 										fill="none"
 										stroke="currentColor"
@@ -335,10 +338,11 @@ export function TicketModal({
 									Details
 								</TabsTrigger>
 								<TabsTrigger
-									className="relative rounded-none border-b-2 border-transparent bg-transparent px-4 py-2.5 text-xs font-medium text-muted-foreground transition-all hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+									className="relative rounded-none border-transparent border-b-2 bg-transparent px-4 py-2.5 font-medium text-muted-foreground text-xs transition-all hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
 									value="agent-insight"
 								>
 									<svg
+										aria-hidden="true"
 										className="mr-1.5 h-3.5 w-3.5"
 										fill="none"
 										stroke="currentColor"
@@ -354,10 +358,11 @@ export function TicketModal({
 									AI Insights
 								</TabsTrigger>
 								<TabsTrigger
-									className="relative rounded-none border-b-2 border-transparent bg-transparent px-4 py-2.5 text-xs font-medium text-muted-foreground transition-all hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+									className="relative rounded-none border-transparent border-b-2 bg-transparent px-4 py-2.5 font-medium text-muted-foreground text-xs transition-all hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
 									value="chat"
 								>
 									<svg
+										aria-hidden="true"
 										className="mr-1.5 h-3.5 w-3.5"
 										fill="none"
 										stroke="currentColor"
@@ -373,10 +378,11 @@ export function TicketModal({
 									Chat
 								</TabsTrigger>
 								<TabsTrigger
-									className="relative rounded-none border-b-2 border-transparent bg-transparent px-4 py-2.5 text-xs font-medium text-muted-foreground transition-all hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+									className="relative rounded-none border-transparent border-b-2 bg-transparent px-4 py-2.5 font-medium text-muted-foreground text-xs transition-all hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
 									value="agent-chat"
 								>
 									<svg
+										aria-hidden="true"
 										className="mr-1.5 h-3.5 w-3.5"
 										fill="none"
 										stroke="currentColor"

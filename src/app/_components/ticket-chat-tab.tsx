@@ -82,6 +82,7 @@ export function TicketChatTab({
 							<div className="flex flex-col items-center justify-center py-16 text-center">
 								<div className="rounded-full bg-muted/30 p-4">
 									<svg
+										aria-hidden="true"
 										className="h-10 w-10 text-muted-foreground/40"
 										fill="none"
 										stroke="currentColor"
@@ -124,6 +125,7 @@ export function TicketChatTab({
 											>
 												{isUser ? (
 													<svg
+														aria-hidden="true"
 														className="h-4 w-4"
 														fill="none"
 														stroke="currentColor"
@@ -138,6 +140,7 @@ export function TicketChatTab({
 													</svg>
 												) : (
 													<svg
+														aria-hidden="true"
 														className="h-4 w-4"
 														fill="none"
 														stroke="currentColor"
@@ -167,9 +170,9 @@ export function TicketChatTab({
 												}`}
 											>
 												<div
-													className={`prose prose-sm max-w-none prose-p:my-1 prose-ol:my-1 prose-ul:my-1 prose-pre:my-2 overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:px-1.5 prose-code:py-0.5 prose-code:before:content-none prose-code:after:content-none ${
+													className={`prose prose-sm prose-ol:my-1 prose-p:my-1 prose-pre:my-2 prose-ul:my-1 max-w-none overflow-x-auto prose-pre:overflow-x-auto prose-code:rounded prose-code:px-1.5 prose-code:py-0.5 prose-code:before:content-none prose-code:after:content-none ${
 														isUser
-															? "prose-invert text-primary-foreground prose-code:bg-primary-foreground/20 prose-code:text-primary-foreground prose-strong:text-primary-foreground"
+															? "prose-invert prose-code:bg-primary-foreground/20 prose-code:text-primary-foreground prose-strong:text-primary-foreground text-primary-foreground"
 															: "prose-invert prose-code:bg-muted prose-code:text-foreground prose-p:text-muted-foreground"
 													}`}
 												>
@@ -179,7 +182,7 @@ export function TicketChatTab({
 												</div>
 											</div>
 											<p
-												className={`mt-1 text-[10px] tabular-nums text-muted-foreground opacity-60 transition-opacity group-hover:opacity-100 ${
+												className={`mt-1 text-[10px] text-muted-foreground tabular-nums opacity-60 transition-opacity group-hover:opacity-100 ${
 													isUser ? "text-right" : ""
 												}`}
 											>
@@ -199,6 +202,7 @@ export function TicketChatTab({
 							<div className="flex gap-3">
 								<div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted/50 text-muted-foreground">
 									<svg
+										aria-hidden="true"
 										className="h-4 w-4"
 										fill="none"
 										stroke="currentColor"
@@ -232,6 +236,7 @@ export function TicketChatTab({
 						<div className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2">
 							<div className="flex items-center gap-2 text-violet-400">
 								<svg
+									aria-hidden="true"
 									className="h-4 w-4 shrink-0"
 									fill="none"
 									stroke="currentColor"
@@ -244,7 +249,7 @@ export function TicketChatTab({
 										strokeWidth={2}
 									/>
 								</svg>
-								<span className="text-xs font-medium">
+								<span className="font-medium text-xs">
 									Replying to insight from{" "}
 									{replyingToInsight.date.toLocaleString(undefined, {
 										month: "short",
@@ -255,12 +260,14 @@ export function TicketChatTab({
 								</span>
 							</div>
 							<Button
+								aria-label="Cancel reply"
 								className="h-6 w-6 p-0 text-violet-400 hover:bg-violet-500/20 hover:text-violet-300"
 								onClick={() => onReplyingToInsightChange(null)}
 								size="sm"
 								variant="ghost"
 							>
 								<svg
+									aria-hidden="true"
 									className="h-3.5 w-3.5"
 									fill="none"
 									stroke="currentColor"
@@ -296,12 +303,14 @@ export function TicketChatTab({
 							/>
 						</div>
 						<Button
+							aria-label="Send message"
 							className="h-11 w-11 shrink-0 rounded-xl p-0"
 							disabled={!chatInput.trim() || chatMutation.isPending}
 							onClick={handleSendMessage}
 							size="icon"
 						>
 							<svg
+								aria-hidden="true"
 								className="h-5 w-5"
 								fill="none"
 								stroke="currentColor"
@@ -319,7 +328,7 @@ export function TicketChatTab({
 
 					{/* Actions row */}
 					<div className="mt-2 flex items-center justify-between">
-						<p className="text-muted-foreground/60 text-[10px]">
+						<p className="text-[10px] text-muted-foreground/60">
 							Press Enter to send, Shift+Enter for new line
 						</p>
 						{messages.length > 0 && (
@@ -331,6 +340,7 @@ export function TicketChatTab({
 								variant="ghost"
 							>
 								<svg
+									aria-hidden="true"
 									className="h-3 w-3"
 									fill="none"
 									stroke="currentColor"

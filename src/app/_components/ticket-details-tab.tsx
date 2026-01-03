@@ -25,7 +25,10 @@ interface TicketDetailsTabProps {
 }
 
 // Helper to get score color
-function getScoreColor(score: number, type: "urgency" | "impact" | "complexity") {
+function getScoreColor(
+	score: number,
+	type: "urgency" | "impact" | "complexity",
+) {
 	if (type === "complexity") {
 		// Lower complexity is better
 		if (score >= 7) return "text-red-400";
@@ -55,6 +58,7 @@ export function TicketDetailsTab({
 						<div className="rounded-lg border border-border/30 bg-card/30 p-3">
 							<div className="flex items-center gap-2 text-muted-foreground">
 								<svg
+									aria-hidden="true"
 									className="h-3.5 w-3.5"
 									fill="none"
 									stroke="currentColor"
@@ -67,11 +71,11 @@ export function TicketDetailsTab({
 										strokeWidth={2}
 									/>
 								</svg>
-								<span className="text-[10px] font-medium uppercase tracking-wider">
+								<span className="font-medium text-[10px] uppercase tracking-wider">
 									Assignee
 								</span>
 							</div>
-							<p className="mt-1.5 truncate text-sm font-medium">
+							<p className="mt-1.5 truncate font-medium text-sm">
 								{ticket.assignee ?? (
 									<span className="text-muted-foreground">Unassigned</span>
 								)}
@@ -82,6 +86,7 @@ export function TicketDetailsTab({
 						<div className="rounded-lg border border-border/30 bg-card/30 p-3">
 							<div className="flex items-center gap-2 text-muted-foreground">
 								<svg
+									aria-hidden="true"
 									className="h-3.5 w-3.5"
 									fill="none"
 									stroke="currentColor"
@@ -94,11 +99,11 @@ export function TicketDetailsTab({
 										strokeWidth={2}
 									/>
 								</svg>
-								<span className="text-[10px] font-medium uppercase tracking-wider">
+								<span className="font-medium text-[10px] uppercase tracking-wider">
 									Created
 								</span>
 							</div>
-							<p className="mt-1.5 text-sm font-medium tabular-nums">
+							<p className="mt-1.5 font-medium text-sm tabular-nums">
 								{new Date(ticket.createdAt).toLocaleDateString(undefined, {
 									month: "short",
 									day: "numeric",
@@ -112,6 +117,7 @@ export function TicketDetailsTab({
 							<div className="rounded-lg border border-border/30 bg-card/30 p-3">
 								<div className="flex items-center gap-2 text-muted-foreground">
 									<svg
+										aria-hidden="true"
 										className="h-3.5 w-3.5"
 										fill="none"
 										stroke="currentColor"
@@ -124,11 +130,11 @@ export function TicketDetailsTab({
 											strokeWidth={2}
 										/>
 									</svg>
-									<span className="text-[10px] font-medium uppercase tracking-wider">
+									<span className="font-medium text-[10px] uppercase tracking-wider">
 										Updated
 									</span>
 								</div>
-								<p className="mt-1.5 text-sm font-medium tabular-nums">
+								<p className="mt-1.5 font-medium text-sm tabular-nums">
 									{new Date(ticket.updatedAt).toLocaleDateString(undefined, {
 										month: "short",
 										day: "numeric",
@@ -143,6 +149,7 @@ export function TicketDetailsTab({
 							<div className="rounded-lg border border-border/30 bg-card/30 p-3">
 								<div className="flex items-center gap-2 text-muted-foreground">
 									<svg
+										aria-hidden="true"
 										className="h-3.5 w-3.5"
 										fill="none"
 										stroke="currentColor"
@@ -155,11 +162,11 @@ export function TicketDetailsTab({
 											strokeWidth={2}
 										/>
 									</svg>
-									<span className="text-[10px] font-medium uppercase tracking-wider">
+									<span className="font-medium text-[10px] uppercase tracking-wider">
 										Synced
 									</span>
 								</div>
-								<p className="mt-1.5 text-sm font-medium tabular-nums">
+								<p className="mt-1.5 font-medium text-sm tabular-nums">
 									{new Date(ticket.lastSyncedAt).toLocaleDateString(undefined, {
 										month: "short",
 										day: "numeric",
@@ -175,6 +182,7 @@ export function TicketDetailsTab({
 						<div className="space-y-2">
 							<div className="flex items-center gap-2 text-muted-foreground">
 								<svg
+									aria-hidden="true"
 									className="h-3.5 w-3.5"
 									fill="none"
 									stroke="currentColor"
@@ -187,7 +195,7 @@ export function TicketDetailsTab({
 										strokeWidth={2}
 									/>
 								</svg>
-								<span className="text-[10px] font-medium uppercase tracking-wider">
+								<span className="font-medium text-[10px] uppercase tracking-wider">
 									Labels
 								</span>
 							</div>
@@ -208,7 +216,7 @@ export function TicketDetailsTab({
 					{/* Divider */}
 					<div className="flex items-center gap-3">
 						<div className="h-px flex-1 bg-border/30" />
-						<span className="text-muted-foreground/50 text-[10px] font-medium uppercase tracking-wider">
+						<span className="font-medium text-[10px] text-muted-foreground/50 uppercase tracking-wider">
 							Description
 						</span>
 						<div className="h-px flex-1 bg-border/30" />
@@ -217,7 +225,7 @@ export function TicketDetailsTab({
 					{/* Description with improved styling */}
 					<div className="rounded-lg border border-border/30 bg-card/20 p-5">
 						{ticket.description ? (
-							<div className="prose prose-sm prose-invert max-w-none prose-headings:font-semibold prose-headings:text-foreground prose-h1:text-lg prose-h2:text-base prose-h3:text-sm prose-p:text-muted-foreground prose-p:leading-relaxed prose-a:text-primary prose-a:no-underline hover:prose-a:underline prose-code:rounded prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:text-foreground prose-code:font-normal prose-code:before:content-none prose-code:after:content-none prose-pre:rounded-lg prose-pre:border prose-pre:border-border/30 prose-pre:bg-muted/50 prose-li:text-muted-foreground prose-li:marker:text-muted-foreground/50 prose-strong:text-foreground prose-blockquote:border-primary/30 prose-blockquote:text-muted-foreground">
+							<div className="prose prose-sm prose-invert max-w-none prose-code:rounded prose-pre:rounded-lg prose-pre:border prose-blockquote:border-primary/30 prose-pre:border-border/30 prose-code:bg-muted prose-pre:bg-muted/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:font-normal prose-headings:font-semibold prose-a:text-primary prose-blockquote:text-muted-foreground prose-code:text-foreground prose-h1:text-lg prose-h2:text-base prose-h3:text-sm prose-headings:text-foreground prose-li:text-muted-foreground prose-p:text-muted-foreground prose-strong:text-foreground prose-p:leading-relaxed prose-a:no-underline prose-li:marker:text-muted-foreground/50 prose-code:before:content-none prose-code:after:content-none hover:prose-a:underline">
 								<Markdown rehypePlugins={[rehypeSanitize]}>
 									{ticket.description}
 								</Markdown>
@@ -225,6 +233,7 @@ export function TicketDetailsTab({
 						) : (
 							<div className="flex flex-col items-center justify-center py-8 text-center">
 								<svg
+									aria-hidden="true"
 									className="h-8 w-8 text-muted-foreground/30"
 									fill="none"
 									stroke="currentColor"
@@ -250,8 +259,9 @@ export function TicketDetailsTab({
 							{/* Divider */}
 							<div className="flex items-center gap-3">
 								<div className="h-px flex-1 bg-border/30" />
-								<span className="flex items-center gap-1.5 text-muted-foreground/50 text-[10px] font-medium uppercase tracking-wider">
+								<span className="flex items-center gap-1.5 font-medium text-[10px] text-muted-foreground/50 uppercase tracking-wider">
 									<svg
+										aria-hidden="true"
 										className="h-3 w-3"
 										fill="none"
 										stroke="currentColor"
@@ -284,12 +294,13 @@ export function TicketDetailsTab({
 									/>
 									<CardContent className="p-4 pt-5 text-center">
 										<div
-											className={`font-mono text-3xl font-semibold tabular-nums ${getScoreColor(latestRanking.urgencyScore, "urgency")}`}
+											className={`font-mono font-semibold text-3xl tabular-nums ${getScoreColor(latestRanking.urgencyScore, "urgency")}`}
 										>
 											{latestRanking.urgencyScore.toFixed(1)}
 										</div>
 										<div className="mt-1.5 flex items-center justify-center gap-1.5 text-muted-foreground text-xs">
 											<svg
+												aria-hidden="true"
 												className="h-3.5 w-3.5"
 												fill="none"
 												stroke="currentColor"
@@ -322,12 +333,13 @@ export function TicketDetailsTab({
 									/>
 									<CardContent className="p-4 pt-5 text-center">
 										<div
-											className={`font-mono text-3xl font-semibold tabular-nums ${getScoreColor(latestRanking.impactScore, "impact")}`}
+											className={`font-mono font-semibold text-3xl tabular-nums ${getScoreColor(latestRanking.impactScore, "impact")}`}
 										>
 											{latestRanking.impactScore.toFixed(1)}
 										</div>
 										<div className="mt-1.5 flex items-center justify-center gap-1.5 text-muted-foreground text-xs">
 											<svg
+												aria-hidden="true"
 												className="h-3.5 w-3.5"
 												fill="none"
 												stroke="currentColor"
@@ -360,12 +372,13 @@ export function TicketDetailsTab({
 									/>
 									<CardContent className="p-4 pt-5 text-center">
 										<div
-											className={`font-mono text-3xl font-semibold tabular-nums ${getScoreColor(latestRanking.complexityScore, "complexity")}`}
+											className={`font-mono font-semibold text-3xl tabular-nums ${getScoreColor(latestRanking.complexityScore, "complexity")}`}
 										>
 											{latestRanking.complexityScore.toFixed(1)}
 										</div>
 										<div className="mt-1.5 flex items-center justify-center gap-1.5 text-muted-foreground text-xs">
 											<svg
+												aria-hidden="true"
 												className="h-3.5 w-3.5"
 												fill="none"
 												stroke="currentColor"
@@ -391,6 +404,7 @@ export function TicketDetailsTab({
 								<div className="rounded-lg border border-border/30 bg-muted/20 p-4">
 									<div className="flex items-start gap-2">
 										<svg
+											aria-hidden="true"
 											className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
 											fill="none"
 											stroke="currentColor"

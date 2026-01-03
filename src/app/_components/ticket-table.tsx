@@ -130,7 +130,7 @@ export function TicketTable({
 				</div>
 				{/* Table skeleton with animated rows */}
 				<div className="overflow-hidden rounded-xl border border-border/50 bg-card/30">
-					<div className="border-b border-border/30 bg-muted/30 px-4 py-3">
+					<div className="border-border/30 border-b bg-muted/30 px-4 py-3">
 						<div className="flex gap-8">
 							<Skeleton className="h-4 w-16" />
 							<Skeleton className="h-4 w-14" />
@@ -140,7 +140,7 @@ export function TicketTable({
 					</div>
 					{[...Array(5)].map((_, i) => (
 						<div
-							className="flex items-center gap-4 border-b border-border/20 px-4 py-4 last:border-b-0"
+							className="flex items-center gap-4 border-border/20 border-b px-4 py-4 last:border-b-0"
 							key={i}
 							style={{ animationDelay: `${i * 100}ms` }}
 						>
@@ -165,7 +165,7 @@ export function TicketTable({
 				<div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/30 bg-muted/20 p-2">
 					{/* View mode toggle */}
 					<div className="flex items-center gap-2 rounded-md bg-background/50 px-2 py-1">
-						<span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+						<span className="font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
 							View
 						</span>
 						<Select
@@ -181,6 +181,7 @@ export function TicketTable({
 								<SelectItem value="standard">
 									<span className="flex items-center gap-1.5">
 										<svg
+											aria-hidden="true"
 											className="h-3.5 w-3.5"
 											fill="none"
 											stroke="currentColor"
@@ -199,6 +200,7 @@ export function TicketTable({
 								<SelectItem value="ai-ranked">
 									<span className="flex items-center gap-1.5">
 										<svg
+											aria-hidden="true"
 											className="h-3.5 w-3.5"
 											fill="none"
 											stroke="currentColor"
@@ -225,7 +227,7 @@ export function TicketTable({
 						<>
 							{/* Sort controls */}
 							<div className="flex items-center gap-2 rounded-md bg-background/50 px-2 py-1">
-								<span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+								<span className="font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
 									Sort
 								</span>
 								<Select
@@ -253,6 +255,7 @@ export function TicketTable({
 										>
 											{sortOrder === "desc" ? (
 												<svg
+													aria-hidden="true"
 													className="h-4 w-4"
 													fill="none"
 													stroke="currentColor"
@@ -267,6 +270,7 @@ export function TicketTable({
 												</svg>
 											) : (
 												<svg
+													aria-hidden="true"
 													className="h-4 w-4"
 													fill="none"
 													stroke="currentColor"
@@ -290,7 +294,7 @@ export function TicketTable({
 
 							{/* Status filter */}
 							<div className="flex items-center gap-2 rounded-md bg-background/50 px-2 py-1">
-								<span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+								<span className="font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
 									Status
 								</span>
 								<Select
@@ -344,6 +348,7 @@ export function TicketTable({
 					{/* Ticket count */}
 					<div className="flex items-center gap-1.5 text-muted-foreground text-xs">
 						<svg
+							aria-hidden="true"
 							className="h-3.5 w-3.5"
 							fill="none"
 							stroke="currentColor"
@@ -368,7 +373,9 @@ export function TicketTable({
 							<TooltipTrigger asChild>
 								<Button
 									className="gap-1.5 shadow-sm"
-									disabled={rankMutation.isPending || !ticketsQuery.data?.length}
+									disabled={
+										rankMutation.isPending || !ticketsQuery.data?.length
+									}
 									onClick={handleRankAll}
 									size="sm"
 									variant={rankMutation.isPending ? "secondary" : "default"}
@@ -376,6 +383,7 @@ export function TicketTable({
 									{rankMutation.isPending ? (
 										<>
 											<svg
+												aria-hidden="true"
 												className="h-3.5 w-3.5 animate-spin"
 												fill="none"
 												viewBox="0 0 24 24"
@@ -399,6 +407,7 @@ export function TicketTable({
 									) : (
 										<>
 											<svg
+												aria-hidden="true"
 												className="h-3.5 w-3.5"
 												fill="none"
 												stroke="currentColor"
@@ -428,24 +437,24 @@ export function TicketTable({
 					<Table>
 						<TableHeader>
 							<TableRow className="border-border/30 bg-muted/30 hover:bg-muted/30">
-								<TableHead className="w-[45%] py-3 font-medium text-muted-foreground text-[11px] uppercase tracking-wide">
+								<TableHead className="w-[45%] py-3 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
 									Ticket
 								</TableHead>
-								<TableHead className="py-3 font-medium text-muted-foreground text-[11px] uppercase tracking-wide">
+								<TableHead className="py-3 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
 									Status
 								</TableHead>
-								<TableHead className="py-3 font-medium text-muted-foreground text-[11px] uppercase tracking-wide">
+								<TableHead className="py-3 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
 									Priority
 								</TableHead>
-								<TableHead className="py-3 font-medium text-muted-foreground text-[11px] uppercase tracking-wide">
+								<TableHead className="py-3 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
 									Source
 								</TableHead>
 								{viewMode === "ai-ranked" && (
-									<TableHead className="py-3 font-medium text-muted-foreground text-[11px] uppercase tracking-wide">
+									<TableHead className="py-3 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
 										AI Score
 									</TableHead>
 								)}
-								<TableHead className="py-3 text-right font-medium text-muted-foreground text-[11px] uppercase tracking-wide">
+								<TableHead className="py-3 text-right font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
 									Created
 								</TableHead>
 							</TableRow>
@@ -460,6 +469,7 @@ export function TicketTable({
 										<div className="flex flex-col items-center gap-3">
 											<div className="rounded-full bg-muted/50 p-4">
 												<svg
+													aria-hidden="true"
 													className="h-8 w-8 text-muted-foreground"
 													fill="none"
 													stroke="currentColor"
@@ -485,7 +495,7 @@ export function TicketTable({
 									</TableCell>
 								</TableRow>
 							) : (
-								tickets?.map((ticket, index) => {
+								tickets?.map((ticket) => {
 									const isPendingAnalysis = pendingAskTicketIds.has(ticket.id);
 									const hasAIScore = ticket.aiScore !== null;
 
@@ -541,10 +551,7 @@ export function TicketTable({
 																		{ticket.title}
 																	</span>
 																</TooltipTrigger>
-																<TooltipContent
-																	className="max-w-md"
-																	side="top"
-																>
+																<TooltipContent className="max-w-md" side="top">
 																	{ticket.title}
 																</TooltipContent>
 															</Tooltip>
@@ -573,7 +580,7 @@ export function TicketTable({
 											</TableCell>
 											<TableCell>
 												<Badge
-													className={`text-[11px] font-medium ${STATUS_STYLES[ticket.status]}`}
+													className={`font-medium text-[11px] ${STATUS_STYLES[ticket.status]}`}
 													variant="outline"
 												>
 													{ticket.status.replace("_", " ")}
@@ -581,7 +588,7 @@ export function TicketTable({
 											</TableCell>
 											<TableCell>
 												<Badge
-													className={`text-[11px] font-medium ${PRIORITY_STYLES[ticket.priority ?? "medium"]}`}
+													className={`font-medium text-[11px] ${PRIORITY_STYLES[ticket.priority ?? "medium"]}`}
 													variant="outline"
 												>
 													<span className="mr-1 opacity-70">
@@ -596,6 +603,7 @@ export function TicketTable({
 												>
 													{ticket.provider === "jira" && (
 														<svg
+															aria-hidden="true"
 															className="h-3.5 w-3.5"
 															fill="currentColor"
 															viewBox="0 0 24 24"
@@ -605,6 +613,7 @@ export function TicketTable({
 													)}
 													{ticket.provider === "linear" && (
 														<svg
+															aria-hidden="true"
 															className="h-3.5 w-3.5"
 															fill="currentColor"
 															viewBox="0 0 24 24"
@@ -614,6 +623,7 @@ export function TicketTable({
 													)}
 													{ticket.provider === "docker" && (
 														<svg
+															aria-hidden="true"
 															className="h-3.5 w-3.5"
 															fill="currentColor"
 															viewBox="0 0 24 24"
@@ -623,6 +633,7 @@ export function TicketTable({
 													)}
 													{ticket.provider === "manual" && (
 														<svg
+															aria-hidden="true"
 															className="h-3.5 w-3.5"
 															fill="none"
 															stroke="currentColor"
@@ -642,20 +653,25 @@ export function TicketTable({
 											{viewMode === "ai-ranked" && (
 												<TableCell>
 													{hasAIScore ? (
-														<div className="flex items-center gap-1.5">
-															<div
-																className={`h-2 w-2 rounded-full ${
-																	ticket.aiScore! >= 7
-																		? "bg-red-400"
-																		: ticket.aiScore! >= 5
-																			? "bg-amber-400"
-																			: "bg-emerald-400"
-																}`}
-															/>
-															<span className="font-mono text-sm font-medium tabular-nums">
-																{ticket.aiScore!.toFixed(1)}
-															</span>
-														</div>
+														(() => {
+															const aiScore = ticket.aiScore ?? 0;
+															const scoreColor =
+																aiScore >= 7
+																	? "bg-red-400"
+																	: aiScore >= 5
+																		? "bg-amber-400"
+																		: "bg-emerald-400";
+															return (
+																<div className="flex items-center gap-1.5">
+																	<div
+																		className={`h-2 w-2 rounded-full ${scoreColor}`}
+																	/>
+																	<span className="font-medium font-mono text-sm tabular-nums">
+																		{aiScore.toFixed(1)}
+																	</span>
+																</div>
+															);
+														})()
 													) : (
 														<span className="text-muted-foreground text-xs">
 															—
