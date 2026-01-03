@@ -11,24 +11,15 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useOpencodeSSE } from "@/hooks/useOpencodeSSE";
-import type {
-	ticketMessages,
-	ticketRankings,
-	ticketRecommendations,
-	tickets,
-} from "@/server/db/schema";
 import { api } from "@/trpc/react";
+import type { TicketWithRelations } from "@/types";
 import { PRIORITY_STYLES, STATUS_STYLES } from "./constants";
 import { TicketAgentTab } from "./ticket-agent-tab";
 import { TicketChatTab } from "./ticket-chat-tab";
 import { TicketDetailsTab } from "./ticket-details-tab";
 import { TicketRecommendationsTab } from "./ticket-recommendations-tab";
 
-type Ticket = typeof tickets.$inferSelect & {
-	recommendations?: (typeof ticketRecommendations.$inferSelect)[];
-	rankings?: (typeof ticketRankings.$inferSelect)[];
-	messages?: (typeof ticketMessages.$inferSelect)[];
-};
+type Ticket = TicketWithRelations;
 
 interface TicketModalProps {
 	ticket: Ticket | null;

@@ -1,20 +1,11 @@
-import { createOpencodeClient } from "@opencode-ai/sdk";
-import { env } from "@/env";
-
-let client: ReturnType<typeof createOpencodeClient> | null = null;
-
 /**
- * Singleton Opencode SDK client used by API routes and server modules.
+ * OpenCode Client
+ *
+ * Re-exports from the consolidated ai-agents module for backwards compatibility.
+ * @deprecated Import from "@/server/ai-agents" instead.
  */
-export function getOpencodeClient() {
-	if (!client) {
-		client = createOpencodeClient({
-			baseUrl: env.OPENCODE_SERVER_URL,
-			directory: env.OPENCODE_DIRECTORY,
-			responseStyle: "fields",
-			throwOnError: false,
-		});
-	}
 
-	return client;
-}
+export {
+	getOpencodeClient,
+	resetOpencodeClient,
+} from "@/server/ai-agents/providers/opencode/client";
