@@ -40,7 +40,7 @@ export const mockMessages = [
 		content: "I'd be happy to help. Can you describe the bug?",
 		createdAt: new Date("2024-01-15T10:00:30Z"),
 		metadata: {
-			model: "opencode/big-pickle",
+			model: "opencode/minimax-m2.1-free",
 		},
 	},
 	{

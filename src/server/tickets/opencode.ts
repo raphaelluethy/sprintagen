@@ -401,7 +401,7 @@ export async function sendOpencodeMessage(
 					}
 				: {
 						providerID: "opencode",
-						modelID: "big-pickle",
+						modelID: "minimax-m2.1-free",
 					},
 		};
 

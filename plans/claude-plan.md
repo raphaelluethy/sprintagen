@@ -169,7 +169,7 @@ export interface AgentProvider {
 export function getDefaultModel(): ModelSelection {
   return env.FAST_MODE
     ? { providerId: "cerebras", modelId: "zai-glm-4.6" }
-    : { providerId: "opencode", modelId: "big-pickle" };
+    : { providerId: "opencode", modelId: "minimax-m2.1-free" };
 }
 ```
 

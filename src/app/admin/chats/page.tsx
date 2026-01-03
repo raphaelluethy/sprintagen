@@ -11,7 +11,7 @@ export default function AdminChatsPage() {
 	const fastMode = env.NEXT_PUBLIC_FAST_MODE;
 	const modelConfig = fastMode
 		? { providerID: "cerebras", modelID: "zai-glm-4.6" }
-		: { providerID: "opencode", modelID: "big-pickle" };
+		: { providerID: "opencode", modelID: "minimax-m2.1-free" };
 
 	const {
 		sessions,

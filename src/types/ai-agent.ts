@@ -5,6 +5,7 @@
  * Supports single active agent mode with pluggable implementations.
  */
 
+import type { ToolPart } from "@opencode-ai/sdk";
 import type { ToolCallInfo } from "./opencode";
 
 // ============================================================================
@@ -59,6 +60,55 @@ export interface ModelSelection {
 }
 
 // ============================================================================
+// Agent Capabilities
+// ============================================================================
+
+/**
+ * Capabilities that an agent provider may support.
+ * Used to conditionally enable features in the UI and backend.
+ */
+export interface AgentCapabilities {
+	/** Supports session status tracking (idle/busy/error) */
+	sessionStatus: boolean;
+	/** Supports extracting tool call information */
+	toolCalls: boolean;
+	/** Supports session diff (code changes tracking) */
+	sessionDiff: boolean;
+	/** Supports session todos (task tracking) */
+	sessionTodos: boolean;
+	/** Supports async/fire-and-forget prompts */
+	asyncPrompts: boolean;
+	/** Supports subagent/task delegation */
+	subagents: boolean;
+}
+
+/**
+ * Session status info returned by providers that support status tracking
+ */
+export interface SessionStatusInfo {
+	type: "idle" | "busy" | "retry";
+	error?: string;
+}
+
+/**
+ * Session diff item for tracking code changes
+ */
+export interface SessionDiffItem {
+	path: string;
+	status: "added" | "modified" | "deleted";
+	diff?: string;
+}
+
+/**
+ * Session todo item for tracking tasks
+ */
+export interface SessionTodoItem {
+	id: string;
+	content: string;
+	status: "pending" | "in_progress" | "completed";
+}
+
+// ============================================================================
 // Agent Provider Interface
 // ============================================================================
 
@@ -83,6 +133,10 @@ export interface AgentProvider {
 	/** Verify provider connectivity */
 	checkHealth(): Promise<boolean>;
 
+	// Capabilities
+	/** Declare what capabilities this provider supports */
+	getCapabilities(): AgentCapabilities;
+
 	// Session Management
 	/** Create a new conversation session */
 	createSession(title?: string): Promise<AgentSession>;
@@ -106,6 +160,24 @@ export interface AgentProvider {
 	supportsStreaming(): boolean;
 	/** Get SSE endpoint URL for real-time updates */
 	getEventSourceUrl?(sessionId: string): string;
+
+	// Extended Capabilities (optional - check getCapabilities() before calling)
+	/** Get session status (requires sessionStatus capability) */
+	getSessionStatus?(sessionId: string): Promise<SessionStatusInfo>;
+	/** Get all session statuses (requires sessionStatus capability) */
+	getAllSessionStatuses?(): Promise<Record<string, SessionStatusInfo>>;
+	/** Get tool calls for a session (requires toolCalls capability) */
+	getToolCalls?(sessionId: string): Promise<ToolPart[]>;
+	/** Get session diff (requires sessionDiff capability) */
+	getSessionDiff?(sessionId: string): Promise<SessionDiffItem[]>;
+	/** Get session todos (requires sessionTodos capability) */
+	getSessionTodos?(sessionId: string): Promise<SessionTodoItem[]>;
+	/** Send async prompt without waiting (requires asyncPrompts capability) */
+	sendMessageAsync?(
+		sessionId: string,
+		message: string,
+		options?: SendMessageOptions,
+	): Promise<void>;
 }
 
 // ============================================================================
