@@ -9,11 +9,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     bash \
+    ripgrep \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install opencode CLI globally
-RUN bun install -g opencode-ai
+RUN bun install -g opencode-ai@1.0.223
 
 # Copy opencode configuration (global config + agents)
 RUN mkdir -p /root/.config/opencode/agent
