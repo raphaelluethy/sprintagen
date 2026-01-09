@@ -5,7 +5,7 @@
  * Supports single active agent mode with pluggable implementations.
  */
 
-import type { ToolPart } from "@opencode-ai/sdk";
+import type { Part, ToolPart } from "@opencode-ai/sdk";
 import type { ToolCallInfo } from "./opencode";
 
 // ============================================================================
@@ -21,6 +21,8 @@ export interface AgentMessage {
 	role: "user" | "assistant";
 	content: string;
 	createdAt: Date;
+	/** Raw message parts from SDK (for providers that support it) */
+	parts?: Part[];
 	metadata?: {
 		model?: string;
 		toolCalls?: ToolCallInfo[];
