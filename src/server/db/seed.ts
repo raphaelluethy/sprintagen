@@ -9,7 +9,6 @@
 import { db } from "./index";
 import {
 	account,
-	posts,
 	session,
 	type TicketPriority,
 	type TicketProvider,
@@ -94,7 +93,6 @@ async function main() {
 		await safeDelete(ticketRecommendations, "ticket_recommendation");
 		await safeDelete(ticketRankings, "ticket_ranking");
 		await safeDelete(tickets, "ticket");
-		await safeDelete(posts, "post");
 		await safeDelete(session, "session");
 		await safeDelete(account, "account");
 		await safeDelete(verification, "verification");
@@ -219,38 +217,7 @@ async function main() {
 		console.log(`✅ Inserted ${seedVerifications.length} verification records`);
 
 		// ========================================================================
-		// Step 6: Insert posts
-		// ========================================================================
-		console.log("📝 Inserting posts...");
-
-		const seedPosts = [
-			{
-				name: "Initial setup",
-				createdById: user1Id,
-				createdAt: daysAgo(25),
-			},
-			{
-				name: "Demo post",
-				createdById: user1Id,
-				createdAt: daysAgo(20),
-			},
-			{
-				name: "Project kickoff",
-				createdById: user2Id,
-				createdAt: daysAgo(10),
-			},
-			{
-				name: "Weekly update",
-				createdById: user2Id,
-				createdAt: daysAgo(3),
-			},
-		];
-
-		await db.insert(posts).values(seedPosts);
-		console.log(`✅ Inserted ${seedPosts.length} posts`);
-
-		// ========================================================================
-		// Step 7: Insert tickets with various combinations
+		// Step 6: Insert tickets with various combinations
 		// ========================================================================
 		console.log("🎫 Inserting tickets...");
 
@@ -745,7 +712,6 @@ async function main() {
 		console.log(`  - ${seedAccounts.length} accounts`);
 		console.log(`  - ${seedSessions.length} sessions`);
 		console.log(`  - ${seedVerifications.length} verification records`);
-		console.log(`  - ${seedPosts.length} posts`);
 		console.log(`  - ${seedTickets.length} tickets`);
 		console.log(`  - ${seedMessages.length} ticket messages`);
 		console.log(`  - ${seedRecommendations.length} ticket recommendations`);
