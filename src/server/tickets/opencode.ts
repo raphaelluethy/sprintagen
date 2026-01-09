@@ -115,6 +115,10 @@ async function clearStaleSessionId(ticketId: string): Promise<void> {
 	console.log(`[OPENCODE] Cleared stale session ID for ticket ${ticketId}`);
 }
 
+/**
+ * @deprecated Use `opencodeTicketService.getOrCreateSession` from `@/server/tickets/opencode-service` instead.
+ * This function will be removed after router migration is complete.
+ */
 export async function lookupExistingOpencodeSession(
 	ticketId: string,
 ): Promise<OpencodeResult<{ sessionId: string | null }>> {
@@ -154,6 +158,10 @@ export async function lookupExistingOpencodeSession(
 	}
 }
 
+/**
+ * @deprecated Use `opencodeTicketService.startSession` from `@/server/tickets/opencode-service` instead.
+ * This function will be removed after router migration is complete.
+ */
 export async function createNewOpencodeSessionForTicket(
 	ticketId: string,
 	ticketTitle: string,
@@ -221,6 +229,10 @@ export async function createNewOpencodeSessionForTicket(
 	}
 }
 
+/**
+ * @deprecated Use `opencodeTicketService.getOrCreateSession` from `@/server/tickets/opencode-service` instead.
+ * This function will be removed after router migration is complete.
+ */
 export async function getOrCreateOpencodeSession(
 	ticketId: string,
 	ticketTitle: string,
@@ -308,6 +320,10 @@ export async function getOrCreateOpencodeSession(
 	}
 }
 
+/**
+ * @deprecated Use `opencodeTicketService.getChat` from `@/server/tickets/opencode-service` instead.
+ * This function will be removed after router migration is complete.
+ */
 export async function getOpencodeMessages(
 	ticketId: string,
 	_ticketTitle: string,
@@ -365,6 +381,10 @@ export async function getOpencodeMessages(
 	}
 }
 
+/**
+ * @deprecated Use `opencodeTicketService.sendMessage` from `@/server/tickets/opencode-service` instead.
+ * This function will be removed after router migration is complete.
+ */
 export async function sendOpencodeMessage(
 	ticketId: string,
 	ticketTitle: string,
@@ -447,6 +467,10 @@ export async function sendOpencodeMessage(
 	}
 }
 
+/**
+ * @deprecated Use `opencodeTicketService.sendMessage` from `@/server/tickets/opencode-service` instead.
+ * This function will be removed after router migration is complete.
+ */
 export async function askOpencodeQuestion(
 	ticketId: string,
 	ticketTitle: string,
@@ -486,6 +510,7 @@ export async function askOpencodeQuestion(
 /**
  * Persist OpenCode session data to the database
  * This allows historical viewing of sessions and their messages
+ * @deprecated This function may be removed in a future release.
  */
 export async function persistOpencodeSession(
 	sessionId: string,
@@ -544,6 +569,7 @@ export async function persistOpencodeSession(
 
 /**
  * Get all persisted sessions for a ticket
+ * @deprecated This function may be removed in a future release.
  */
 export async function getPersistedSessions(ticketId: string): Promise<
 	OpencodeResult<

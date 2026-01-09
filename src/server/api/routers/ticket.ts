@@ -1,8 +1,6 @@
-import type { SessionStatus } from "@opencode-ai/sdk";
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { getOpencodeClient } from "@/lib/opencode-client";
 import {
 	analyzeWithAI,
 	buildChatSystemPrompt,
@@ -17,6 +15,7 @@ import {
 	parseJsonResponse,
 } from "@/server/ai";
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
+import { db as database } from "@/server/db";
 import {
 	ticketMessages,
 	ticketPriorityEnum,
@@ -27,13 +26,10 @@ import {
 	tickets,
 } from "@/server/db/schema";
 import {
-	checkOpencodeHealth,
-	createNewOpencodeSessionForTicket,
-	getOpencodeMessages,
 	getPersistedSessions,
 	persistOpencodeSession,
-	sendOpencodeMessage,
 } from "@/server/tickets/opencode";
+import { opencodeTicketService } from "@/server/tickets/opencode-service";
 import { getProviderRegistry } from "@/server/tickets/provider-registry";
 import {
 	createManualTicket,
@@ -589,7 +585,9 @@ export const ticketRouter = createTRPCRouter({
 	 * Check if Opencode server is available
 	 */
 	getOpencodeStatus: publicProcedure.query(async () => {
-		const available = await checkOpencodeHealth();
+		const { agentRegistry } = await import("@/server/ai-agents");
+		const provider = agentRegistry.getActive();
+		const available = await provider.checkHealth();
 		return { available };
 	}),
 
@@ -601,7 +599,11 @@ export const ticketRouter = createTRPCRouter({
 		// With Redis removed, we no longer track pending sessions in a global list.
 		// We could query tickets with opencodeSessionId, but we don't know their status efficiently.
 		// For now, return empty list to satisfy the UI contract.
-		return [];
+		return [] as {
+			ticketId: string;
+			sessionId: string;
+			status: "pending" | "running" | "completed";
+		}[];
 	}),
 
 	/**
@@ -615,43 +617,12 @@ export const ticketRouter = createTRPCRouter({
 				sessionType: z.enum(["chat", "ask", "admin"]).default("chat"),
 			}),
 		)
-		.mutation(async ({ ctx, input }) => {
-			// Get ticket for title
-			const ticket = await ctx.db.query.tickets.findFirst({
-				where: eq(tickets.id, input.ticketId),
-			});
-
-			if (!ticket) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Ticket not found",
-				});
-			}
-
-			const result = await createNewOpencodeSessionForTicket(
+		.mutation(async ({ input }) => {
+			const { sessionId } = await opencodeTicketService.startSession(
 				input.ticketId,
-				ticket.title,
+				input.sessionType,
 			);
-
-			if (!result.success) {
-				let userMessage = result.error;
-				if (result.error.includes("Failed to create")) {
-					userMessage =
-						"Unable to create Opencode session. Please check if the server is running.";
-				}
-
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: userMessage,
-					cause: result.error,
-				});
-			}
-
-			const sessionId = result.data.sessionId;
-
-			return {
-				sessionId,
-			};
+			return { sessionId };
 		}),
 
 	/**
@@ -665,107 +636,65 @@ export const ticketRouter = createTRPCRouter({
 				sessionId: z.string().optional(),
 			}),
 		)
-		.query(async ({ ctx, input }) => {
-			// Get ticket for title
-			const ticket = await ctx.db.query.tickets.findFirst({
-				where: eq(tickets.id, input.ticketId),
-			});
-
-			if (!ticket) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Ticket not found",
-				});
-			}
-
-			// Fetch from OpenCode API
-			const result = await getOpencodeMessages(
+		.query(async ({ input }) => {
+			const result = await opencodeTicketService.getChat(
 				input.ticketId,
-				ticket.title,
-				input.sessionId ?? undefined,
+				input.sessionId,
 			);
 
-			if (!result.success) {
-				// Provide actionable error messages
-				let userMessage = result.error;
-				if (
-					result.error.includes("ENOENT") ||
-					result.error.includes("NotFoundError")
-				) {
-					userMessage =
-						"Opencode session expired. A new session will be created automatically.";
-				} else if (result.error.includes("Failed to fetch")) {
-					userMessage =
-						"Unable to reach Opencode server. Please check if the server is running.";
-				}
+			// Transform AgentMessage to TransformedMessage format for frontend compatibility
+			const transformedMessages = result.messages.map((m) => ({
+				id: m.id,
+				role: m.role,
+				text: m.content,
+				parts: m.parts ?? [],
+				createdAt: m.createdAt,
+				model: m.metadata?.model,
+				reasoning: m.metadata?.reasoning,
+				toolCalls: m.metadata?.toolCalls,
+			}));
 
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: userMessage,
-					cause: result.error,
-				});
-			}
-
-			// Extract tool calls from message parts
-			const allParts = result.data.messages.flatMap((m) => m.parts ?? []);
-			const toolParts = allParts.filter(
-				(p): p is import("@opencode-ai/sdk").ToolPart => p.type === "tool",
+			// Extract tool calls from all messages for status display
+			const allToolCalls = result.messages.flatMap((m) =>
+				(m.parts ?? []).filter(
+					(p): p is import("@opencode-ai/sdk").ToolPart => p.type === "tool",
+				),
 			);
-
-			// Get actual session status from SDK
-			// SessionStatus can be: idle, pending, running, retry
-			let sessionStatus: SessionStatus = { type: "idle" };
-			if (result.data.currentSessionId) {
-				try {
-					const client = getOpencodeClient();
-					const statusResult = await client.session.status();
-					const sdkStatus = statusResult.data?.[result.data.currentSessionId];
-					if (sdkStatus) {
-						sessionStatus = sdkStatus;
-					}
-				} catch {
-					// Fallback to idle if status fetch fails
-					sessionStatus = { type: "idle" };
-				}
-			}
 
 			// Persist session data for history (don't await - fire and forget)
-			// Only persist when session is idle (completed or error)
-			if (result.data.currentSessionId && result.data.messages.length > 0) {
-				const isRunning = sessionStatus.type !== "idle";
-				const hasRunningTools = toolParts.some(
-					(t) => t.state.status === "pending" || t.state.status === "running",
-				);
-				const persistStatus =
-					isRunning || hasRunningTools ? "running" : "completed";
+			if (result.currentSessionId && transformedMessages.length > 0) {
+				const isRunning = result.status.type !== "idle";
+				const persistStatus = isRunning ? "running" : "completed";
 
 				persistOpencodeSession(
-					result.data.currentSessionId,
+					result.currentSessionId,
 					input.ticketId,
 					"chat",
 					persistStatus,
-					result.data.messages,
+					transformedMessages,
 				).catch((err) => {
 					console.error(
-						`[OPENCODE] Failed to persist session ${result.data.currentSessionId}:`,
+						`[OPENCODE] Failed to persist session ${result.currentSessionId}:`,
 						err,
 					);
 				});
 			}
 
-			// Return messages with session metadata
 			return {
-				messages: result.data.messages,
-				currentSessionId: result.data.currentSessionId,
-				isNewSession: result.data.isNewSession,
-				status: sessionStatus,
-				toolCalls: toolParts,
+				messages: transformedMessages,
+				currentSessionId: result.currentSessionId,
+				isNewSession: result.isNewSession,
+				status: result.status,
+				toolCalls: allToolCalls,
 			};
 		}),
 
 	/**
 	 * Send a message to a ticket's Opencode session
 	 * Sends message to OpenCode via SDK.
+	 *
+	 * @deprecated Use agentServerRouter.sendPrompt or agentServerRouter.sendPromptAsync instead.
+	 * This endpoint will be removed in a future version.
 	 */
 	sendOpencodeChatMessage: publicProcedure
 		.input(
@@ -776,42 +705,33 @@ export const ticketRouter = createTRPCRouter({
 				sessionId: z.string().optional(),
 			}),
 		)
-		.mutation(async ({ ctx, input }) => {
-			// Get ticket for title
-			const ticket = await ctx.db.query.tickets.findFirst({
-				where: eq(tickets.id, input.ticketId),
-			});
-
-			if (!ticket) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Ticket not found",
-				});
-			}
-
-			const result = await sendOpencodeMessage(
+		.mutation(async ({ input }) => {
+			const result = await opencodeTicketService.sendMessage(
 				input.ticketId,
-				ticket.title,
-				input.message,
 				input.sessionId,
+				input.message,
 			);
-
-			if (!result.success) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: result.error,
-				});
-			}
 
 			return {
 				success: true,
-				sessionId: result.data.sessionId,
-				...result.data.message,
+				sessionId: result.sessionId,
+				isNewSession: result.isNewSession,
+				id: result.message.id,
+				role: result.message.role,
+				content: result.message.content,
+				text: result.message.content,
+				createdAt: result.message.createdAt,
+				...(result.message.metadata
+					? { metadata: result.message.metadata }
+					: {}),
 			};
 		}),
 
 	/**
 	 * Get session history for a ticket
+	 *
+	 * @deprecated Consider using agentServerRouter.getTicketChat for live session data.
+	 * This endpoint returns persisted session history which may serve a different purpose.
 	 */
 	getSessionHistory: publicProcedure
 		.input(z.object({ ticketId: z.string() }))
@@ -836,6 +756,9 @@ export const ticketRouter = createTRPCRouter({
 	/**
 	 * Ask Opencode about implementing a ticket
 	 * Creates session, sends prompt, and returns immediately.
+	 *
+	 * @deprecated Use agentServerRouter.askOpencode instead.
+	 * This endpoint will be removed in a future version.
 	 */
 	askOpencode: publicProcedure
 		.input(
@@ -868,19 +791,10 @@ export const ticketRouter = createTRPCRouter({
 			}
 
 			// Create a new session for this analysis
-			const sessionResult = await createNewOpencodeSessionForTicket(
+			const { sessionId } = await opencodeTicketService.startSession(
 				input.ticketId,
-				ticket.title,
+				"ask",
 			);
-
-			if (!sessionResult.success) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: sessionResult.error,
-				});
-			}
-
-			const { sessionId } = sessionResult.data;
 
 			// Build the prompt
 			const stepsPrompt = buildRecommendedStepsPrompt(ticket);
@@ -890,22 +804,16 @@ export const ticketRouter = createTRPCRouter({
 
 			// Send the prompt to Opencode in fire-and-forget mode
 			// We return the sessionId immediately so the UI can connect via SSE
-			// The completion will be handled asynchronously
-			sendOpencodeMessage(input.ticketId, ticket.title, fullPrompt, sessionId)
-				.then(async (messageResult) => {
-					if (messageResult.success) {
-						// Save the result as a recommendation so the UI can display it
-						await ctx.db.insert(ticketRecommendations).values({
-							ticketId: input.ticketId,
-							recommendedSteps: messageResult.data.message.text,
-							opencodeSummary: messageResult.data.message.reasoning ?? null,
-							modelUsed: messageResult.data.message.model ?? "opencode-agent",
-						});
-					} else {
-						console.error(
-							`[askOpencode] Failed to send message: ${messageResult.error}`,
-						);
-					}
+			opencodeTicketService
+				.sendMessage(input.ticketId, sessionId, fullPrompt)
+				.then(async (result) => {
+					// Save the result as a recommendation so the UI can display it
+					await database.insert(ticketRecommendations).values({
+						ticketId: input.ticketId,
+						recommendedSteps: result.message.content,
+						opencodeSummary: result.message.metadata?.reasoning ?? null,
+						modelUsed: result.message.metadata?.model ?? "opencode-agent",
+					});
 				})
 				.catch((err) => {
 					console.error(`[askOpencode] Error sending message:`, err);

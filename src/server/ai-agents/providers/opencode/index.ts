@@ -187,13 +187,15 @@ export class OpencodeProvider implements AgentProvider {
 			);
 		}
 
-		const transformed = transformMessage(result.data.info, result.data.parts);
+		const parts = result.data.parts;
+		const transformed = transformMessage(result.data.info, parts);
 
 		return {
 			id: transformed.id,
 			role: transformed.role,
 			content: transformed.text,
 			createdAt: transformed.createdAt,
+			parts, // Include raw parts for UI tool call rendering
 			metadata: {
 				model: transformed.model,
 				toolCalls: transformed.toolCalls,
@@ -224,12 +226,14 @@ export class OpencodeProvider implements AgentProvider {
 		for (const msg of result.data) {
 			if (!msg?.info) continue;
 
-			const transformed = transformMessage(msg.info, msg.parts ?? []);
+			const parts = msg.parts ?? [];
+			const transformed = transformMessage(msg.info, parts);
 			messages.push({
 				id: transformed.id,
 				role: transformed.role,
 				content: transformed.text,
 				createdAt: transformed.createdAt,
+				parts, // Include raw parts for UI tool call rendering
 				metadata: {
 					model: transformed.model,
 					toolCalls: transformed.toolCalls,
@@ -356,6 +360,7 @@ export class OpencodeProvider implements AgentProvider {
 		await client.session.promptAsync({
 			path: { id: sessionId },
 			body: {
+				agent: "docs-agent",
 				parts: [{ type: "text" as const, text: message }],
 				model: {
 					providerID: model.providerId,

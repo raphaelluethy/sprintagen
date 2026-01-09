@@ -1,5 +1,5 @@
-import type { Message, Part } from "@opencode-ai/sdk";
 import { describe, expect, it } from "bun:test";
+import type { Message, Part } from "@opencode-ai/sdk";
 import {
 	extractReasoningFromParts,
 	extractTextFromParts,

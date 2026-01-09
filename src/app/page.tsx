@@ -114,7 +114,7 @@ function DashboardContent() {
 		},
 	});
 
-	const askOpencodeMutation = api.ticket.askOpencode.useMutation({
+	const askOpencodeMutation = api.agentServer.askOpencode.useMutation({
 		onMutate: (variables) => {
 			setMutatingTicketId(variables.ticketId);
 			markTicketPending(variables.ticketId);

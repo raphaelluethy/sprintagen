@@ -21,7 +21,9 @@ import {
 	transformMessage,
 } from "@/server/ai-agents";
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
-import { tickets } from "@/server/db/schema";
+import { db } from "@/server/db";
+import { ticketRecommendations, tickets } from "@/server/db/schema";
+import { opencodeTicketService } from "@/server/tickets/opencode-service";
 
 // Initialize the registry with the OpenCode provider if not already registered
 if (!agentRegistry.has("opencode")) {
@@ -381,38 +383,12 @@ export const agentServerRouter = createTRPCRouter({
 				sessionType: z.enum(["chat", "ask", "admin"]).default("chat"),
 			}),
 		)
-		.mutation(async ({ ctx, input }) => {
-			// Get ticket
-			const ticket = await ctx.db.query.tickets.findFirst({
-				where: eq(tickets.id, input.ticketId),
-			});
-
-			if (!ticket) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Ticket not found",
-				});
-			}
-
-			// Create session using provider abstraction
-			const provider = agentRegistry.getActive();
-			const session = await provider.createSession(
-				`Ticket: ${ticket.title} (${input.ticketId})`,
+		.mutation(async ({ input }) => {
+			const { sessionId } = await opencodeTicketService.startSession(
+				input.ticketId,
+				input.sessionType,
 			);
-
-			// Store session ID in ticket metadata
-			const metadata = (ticket.metadata ?? {}) as Record<string, unknown>;
-			await ctx.db
-				.update(tickets)
-				.set({
-					metadata: {
-						...metadata,
-						opencodeSessionId: session.id,
-					},
-				})
-				.where(eq(tickets.id, input.ticketId));
-
-			return { sessionId: session.id };
+			return { sessionId };
 		}),
 
 	/**
@@ -486,36 +462,47 @@ export const agentServerRouter = createTRPCRouter({
 				${input.question ?? defaultQuestion}
 			`);
 
-			// Create session using provider abstraction
-			const provider = agentRegistry.getActive();
-			const session = await provider.createSession(
-				`Ticket: ${ticket.title} (${input.ticketId})`,
+			// Create session using OpencodeTicketService
+			const { sessionId } = await opencodeTicketService.startSession(
+				input.ticketId,
+				"ask",
 			);
 
-			// Store session ID in ticket metadata
-			const metadata = (ticket.metadata ?? {}) as Record<string, unknown>;
-			await ctx.db
-				.update(tickets)
-				.set({
-					metadata: {
-						...metadata,
-						opencodeSessionId: session.id,
-					},
-				})
-				.where(eq(tickets.id, input.ticketId));
-
-			// Send the prompt (async if supported, sync otherwise)
+			// Send the prompt and save recommendation on completion
+			const provider = agentRegistry.getActive();
 			const model = getDefaultModel();
-			const capabilities = provider.getCapabilities();
 
-			if (capabilities.asyncPrompts && provider.sendMessageAsync) {
-				await provider.sendMessageAsync(session.id, prompt, { model });
-			} else {
-				await provider.sendMessage(session.id, prompt, { model });
-			}
+			// Fire-and-forget: send message and save recommendation when complete
+			// Use sendMessage (not async) in background to get the final response
+			const sendAndSave = async () => {
+				try {
+					const result = await provider.sendMessage(sessionId, prompt, {
+						model,
+					});
+
+					// Extract assistant's response content
+					const responseContent =
+						result.role === "assistant" ? result.content : undefined;
+
+					// Save recommendation if we got a response
+					if (responseContent) {
+						await db.insert(ticketRecommendations).values({
+							ticketId: input.ticketId,
+							recommendedSteps: responseContent,
+							opencodeSummary: result.metadata?.reasoning ?? null,
+							modelUsed: result.metadata?.model ?? "opencode-agent",
+						});
+					}
+				} catch (err) {
+					console.error(`[askOpencode] Error sending message:`, err);
+				}
+			};
+
+			// Don't await - fire and forget so we return sessionId immediately
+			void sendAndSave();
 
 			return {
-				sessionId: session.id,
+				sessionId,
 				isNewSession: true,
 			};
 		}),
@@ -530,73 +517,37 @@ export const agentServerRouter = createTRPCRouter({
 				sessionId: z.string().optional(),
 			}),
 		)
-		.query(async ({ ctx, input }) => {
-			// Get ticket
-			const ticket = await ctx.db.query.tickets.findFirst({
-				where: eq(tickets.id, input.ticketId),
-			});
+		.query(async ({ input }) => {
+			const result = await opencodeTicketService.getChat(
+				input.ticketId,
+				input.sessionId,
+			);
 
-			if (!ticket) {
-				throw new TRPCError({
-					code: "NOT_FOUND",
-					message: "Ticket not found",
-				});
-			}
+			// Transform AgentMessage to TransformedMessage format for frontend compatibility
+			const transformedMessages = result.messages.map((m) => ({
+				id: m.id,
+				role: m.role,
+				text: m.content,
+				parts: m.parts ?? [],
+				createdAt: m.createdAt,
+				model: m.metadata?.model,
+				reasoning: m.metadata?.reasoning,
+				toolCalls: m.metadata?.toolCalls,
+			}));
 
-			let sessionId = input.sessionId;
+			// Extract tool calls from all messages for status display
+			const allToolCalls = result.messages.flatMap((m) =>
+				(m.parts ?? []).filter(
+					(p): p is import("@opencode-ai/sdk").ToolPart => p.type === "tool",
+				),
+			);
 
-			// If no explicit session ID, check ticket metadata
-			if (!sessionId) {
-				const metadata = (ticket.metadata ?? {}) as Record<string, unknown>;
-				if (typeof metadata.opencodeSessionId === "string") {
-					sessionId = metadata.opencodeSessionId;
-				}
-			}
-
-			if (!sessionId) {
-				return {
-					messages: [],
-					currentSessionId: null,
-					status: { type: "idle" as const },
-					toolCalls: [],
-					isNewSession: false,
-				};
-			}
-
-			// Fetch session data using provider abstraction
-			const provider = agentRegistry.getActive();
-			const capabilities = provider.getCapabilities();
-
-			try {
-				const messages = await provider.getMessages(sessionId);
-
-				// Use provider capabilities for status and toolCalls
-				const [status, toolCalls] = await Promise.all([
-					capabilities.sessionStatus && provider.getSessionStatus
-						? provider.getSessionStatus(sessionId)
-						: Promise.resolve({ type: "idle" as const }),
-					capabilities.toolCalls && provider.getToolCalls
-						? provider.getToolCalls(sessionId)
-						: Promise.resolve([]),
-				]);
-
-				return {
-					messages,
-					currentSessionId: sessionId,
-					status,
-					toolCalls,
-					isNewSession: false,
-				};
-			} catch (error) {
-				console.error("Failed to fetch session data:", error);
-				// Fallback to empty if session fetch fails (e.g. 404)
-				return {
-					messages: [],
-					currentSessionId: null,
-					status: { type: "idle" as const },
-					toolCalls: [],
-					isNewSession: false,
-				};
-			}
+			return {
+				messages: transformedMessages,
+				currentSessionId: result.currentSessionId,
+				status: result.status,
+				toolCalls: allToolCalls,
+				isNewSession: result.isNewSession,
+			};
 		}),
 });
